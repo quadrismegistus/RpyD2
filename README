@@ -8,21 +8,21 @@ class RpyD2
  |  
  |  __init__(self, input, **kwargs)
  |      Keyword arguments will override the following default options:
- |              self.cols=None                          # specify which columns to build from
+ |              self.cols=None                  # specify which columns to build from
  |              self.rownamecol=None            # specify a column name from which row names should be used
- |              self.allcols=False                      # if False, columns limited to those shared among all rows;
- |                                                                        if True, all columns are chosen;
- |                                                                        if a positive integer N, columns limited to the 'top' N columns,
- |                                                                              where columns are compared numerically by:
- |              self.trimbyVariance=True                # if trimbyVariance==True, sum of absolute value of Z-scores across column
- |                                                                                otherwise, sum of scores across column
+ |              self.allcols=False              # if False, columns limited to those shared among all rows;
+ |                                                if True, all columns are chosen;
+ |                                                if a positive integer N, columns limited to the 'top' N columns,
+ |                                                   where columns are compared numerically by:
+ |              self.trimbyVariance=True             # if trimbyVariance==True, sum of absolute value of Z-scores across column
+ |                                                     otherwise, sum of scores across column
  |      
- |              self.rank=True                                  # if rank==True, append 'r'+ranknum to the top N columns
- |              self.zero=0.0                           # if allcols is True or an integer, what should empty cells be populated with?
- |              self.z=False                            # if True, Z-score all quantitative columns
- |              self.factor=True                        # if True, treat strings as factors
+ |              self.rank=True                  # if rank==True, append 'r'+ranknum to the top N columns
+ |              self.zero=0.0                   # if allcols is True or an integer, what should empty cells be populated with?
+ |              self.z=False                    # if True, Z-score all quantitative columns
+ |              self.factor=True                # if True, treat strings as factors
  |              self.onlyQuant=False            # if True, only build quantitative columns
- |              self.onlyCat=False                      # if True, only build categorical (string) columns
+ |              self.onlyCat=False              # if True, only build categorical (string) columns
  |  
  |  __repr__(self)
  |  
