@@ -32,3 +32,18 @@ class M
  |  plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, ji
 tter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, xlab_
 size=14, ylab_size=24)
+ |  
+ |  q(self)
+ |      Return a version of self of only quantitative columns
+ |  
+ |  row(self, rowname)
+ |  
+ |  sub(self, cols=[], rows=[])
+ |  
+ |  summary(self)
+ |  
+ |  testIndependence(self, cols=[])
+ |  
+ |  toDL(self, cols=None, rows=None, rownamecol=False)
+ |  
+ |  xtabs(self, cols=[])
