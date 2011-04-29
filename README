@@ -1,12 +1,28 @@
 A python class modeled on Rpy2's DataFrame, providing convenient access to common statistical procedures in R.
 ======
 
-Help on instance of M in module Rpy2Matrix:
+Help on instance of RpyD2 in module rpyd2:
 
-class M
+class RpyD2
  |  Methods defined here:
  |  
  |  __init__(self, input, **kwargs)
+ |      Keyword arguments will override the following default options:
+ |              self.cols=None                          # specify which columns to build from
+ |              self.rownamecol=None            # specify a column name from which row names should be used
+ |              self.allcols=False                      # if False, columns limited to those shared among all rows;
+ |                                                                        if True, all columns are chosen;
+ |                                                                        if a positive integer N, columns limited to the 'top' N columns,
+ |                                                                              where columns are compared numerically by:
+ |              self.trimbyVariance=True                # if trimbyVariance==True, sum of absolute value of Z-scores across column
+ |                                                                                otherwise, sum of scores across column
+ |      
+ |              self.rank=True                                  # if rank==True, append 'r'+ranknum to the top N columns
+ |              self.zero=0.0                           # if allcols is True or an integer, what should empty cells be populated with?
+ |              self.z=False                            # if True, Z-score all quantitative columns
+ |              self.factor=True                        # if True, treat strings as factors
+ |              self.onlyQuant=False            # if True, only build quantitative columns
+ |              self.onlyCat=False                      # if True, only build categorical (string) columns
  |  
  |  __repr__(self)
  |  
@@ -17,6 +33,7 @@ class M
  |  ca(self, fn, cols=[], toprint=True)
  |  
  |  col(self, colname)
+ |      Return column 'colname', where colname can be either a string name or an integer position (starting at 0).
  |  
  |  glm(self, ykey='y', family='gaussian', anovaTest='Chisq')
  |      API to R's glm:
@@ -29,21 +46,29 @@ class M
  |  
  |  pca(self, fn='pca.png', col=None, w=1200, h=1200)
  |  
- |  plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, ji
-tter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, xlab_
-size=14, ylab_size=24)
+ |  plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, xlab_size=14, ylab_size=24)
  |  
  |  q(self)
  |      Return a version of self of only quantitative columns
  |  
  |  row(self, rowname)
+ |      Return row 'rowname', where rowname can be either a string name or an integer position (starting at 0).
  |  
  |  sub(self, cols=[], rows=[])
+ |      Return an RpyD2 from self, with only those rows and/or columns as specified.
  |  
  |  summary(self)
  |  
  |  testIndependence(self, cols=[])
  |  
  |  toDL(self, cols=None, rows=None, rownamecol=False)
+ |      Return a dictionary of lists representation of self:
+ |      {'col0':[row0val,row1val,...],
+ |      'col1':[row1val,row2val,...],
+ |      ...}
+ |      
+ |      If rows is a non-empty list, return only these rows.
+ |      If cols is a non-empty list, return only these cols.
+ |      If both are non-empty, return only these rows and only these cols.
  |  
  |  xtabs(self, cols=[])

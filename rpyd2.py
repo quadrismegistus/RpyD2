@@ -83,7 +83,7 @@ class RpyD2():
 		return self.df.__str__()
 	
 	def __repr__(self):
-		return "<Rpy2Matrix containing "+str(self.nrow)+"x"+str(self.ncol)+" "+self.df.__repr__()[1:-1].replace(" - "," @ ")+">"
+		return "<RpyD2 storing a "+str(self.ncol)+"-by-"+str(self.ncol)+"row "+self.df.__repr__()[1:-1].replace(" - "," @ ")+">"
 	
 	def col(self,colname):
 		"""Return column 'colname', where colname can be either a string name or an integer position (starting at 0)."""
@@ -115,7 +115,7 @@ class RpyD2():
 				if type(c)==type(ro.FactorVector([])):
 					l+=[c.levels[c[rownum] - 1]]
 				else:
-					l+=[c[rownum]]h
+					l+=[c[rownum]]
 		
 			return l
 		except:
@@ -186,9 +186,7 @@ class RpyD2():
 
 	
 	def sub(self,cols=[],rows=[]):
-		"""Return a RpyD2
-		
-		"""
+		"""Return an RpyD2 from self, with only those rows and/or columns as specified."""
 		
 		if cols and not rows:
 			keytup=('cols',tuple(sorted(cols)))
@@ -202,10 +200,7 @@ class RpyD2():
 		try:
 			return self._subv[keytup[0]][keytup[1]]
 		except KeyError:
-			#if bool(self.rownames):
-			m=M(self.toDL(cols,rows,rownamecol=True),rownamecol='rownamecol')
-			#else:
-			#	m=M(self.toDL(cols,rows))
+			m=RpyD2(self.toDL(cols,rows,rownamecol=True),rownamecol='rownamecol')
 			self._subv[keytup[0]][keytup[1]]=m
 			return m
 	
@@ -217,7 +212,7 @@ class RpyD2():
 		if self._quantv!=None:
 			return self._quantv
 				
-		self._quantv=M(self.toDL(),rownames=self.rownames,onlyQuant=True)
+		self._quantv=RpyD2(self.toDL(),rownames=self.rownames,onlyQuant=True)
 		return self._quantv
 	
 	
