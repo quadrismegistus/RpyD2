@@ -1,5 +1,5 @@
 """
-Rpy2Matrix
+RpyD2
 depends:
 	rpy2  <http://rpy.sourceforge.net/rpy2.html>
 """
@@ -18,20 +18,35 @@ class InputNotRecognizedError(Exception):
 
 
 
-class M():
+class RpyD2():
 	def __init__(self,input,**kwargs):
+		"""
+		Keyword arguments will override the following default options:
+			self.cols=None				# specify which columns to build from
+			self.rownamecol=None		# specify a column name from which row names should be used
+			self.allcols=False			# if False, columns limited to those shared among all rows;
+										  if True, all columns are chosen;
+										  if a positive integer N, columns limited to the 'top' N columns,
+											where columns are compared numerically by:
+			self.trimbyVariance=True		# if trimbyVariance==True, sum of absolute value of Z-scores across column
+											  otherwise, sum of scores across column
+
+			self.rank=True					# if rank==True, append 'r'+ranknum to the top N columns
+			self.zero=0.0				# if allcols is True or an integer, what should empty cells be populated with?
+			self.z=False				# if True, Z-score all quantitative columns
+			self.factor=True			# if True, treat strings as factors
+			self.onlyQuant=False		# if True, only build quantitative columns
+			self.onlyCat=False			# if True, only build categorical (string) columns
+		"""
+				
 		## set defaults
 		self.cols=None
 		self.rownamecol=None
-		self.factorcol=None
-		self.thresholds=[]
 		self.allcols=False
 		self.trimbyVariance=True
+		self.rank=True
 		self.factor=True
-		self.rank=False
-		self.sumcol=''
 		self.z=False
-		self.df=True
 		self.zero=0.0
 		self.onlyQuant=False
 		self.onlyCat=False
@@ -43,6 +58,7 @@ class M():
 		
 		## double override with non-keyword
 		#self.input=input
+		self.df=None
 		self.nrow=0
 		self.ncol=0
 		self._quantv=None
@@ -70,6 +86,7 @@ class M():
 		return "<Rpy2Matrix containing "+str(self.nrow)+"x"+str(self.ncol)+" "+self.df.__repr__()[1:-1].replace(" - "," @ ")+">"
 	
 	def col(self,colname):
+		"""Return column 'colname', where colname can be either a string name or an integer position (starting at 0)."""
 		try:
 			if type(colname)==type(''):
 				colnum=self.cols.index(colname)
@@ -85,6 +102,7 @@ class M():
 			return
 	
 	def row(self,rowname):
+		"""Return row 'rowname', where rowname can be either a string name or an integer position (starting at 0)."""
 		try:
 			if type(rowname)==type(''):
 				rownum=self.rows.index(rowname)
@@ -97,7 +115,7 @@ class M():
 				if type(c)==type(ro.FactorVector([])):
 					l+=[c.levels[c[rownum] - 1]]
 				else:
-					l+=[c[rownum]]
+					l+=[c[rownum]]h
 		
 			return l
 		except:
@@ -105,6 +123,17 @@ class M():
 	
 	
 	def toDL(self,cols=None,rows=None,rownamecol=False):
+		"""
+		Return a dictionary of lists representation of self:
+		{'col0':[row0val,row1val,...],
+		'col1':[row1val,row2val,...],
+		...}
+		
+		If rows is a non-empty list, return only these rows.
+		If cols is a non-empty list, return only these cols.
+		If both are non-empty, return only these rows and only these cols.
+		"""
+		
 		dl={}
 		if not cols and not rows:
 			for i in range(self.ncol):
@@ -157,6 +186,10 @@ class M():
 
 	
 	def sub(self,cols=[],rows=[]):
+		"""Return a RpyD2
+		
+		"""
+		
 		if cols and not rows:
 			keytup=('cols',tuple(sorted(cols)))
 		elif cols and rows:
@@ -374,9 +407,6 @@ class M():
 		stats    = importr('stats')
 		graphics = importr('graphics')
 
-		# 
-		# if col:
-		# 	df,factors=dataframe(df,factorcol=col)
 		df=self.q().df
 		pca = stats.princomp(df)
 
