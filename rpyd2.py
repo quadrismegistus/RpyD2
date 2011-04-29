@@ -9,7 +9,7 @@ from rpy2 import robjects as ro
 r = ro.r
 from rpy2.robjects.packages import importr
 import rpy2.robjects.lib.ggplot2 as ggplot2
-
+grdevices = importr('grDevices')
 
 
 class InputNotRecognizedError(Exception):
@@ -401,6 +401,9 @@ class RpyD2():
 		xdat=self.col(xcol)
 		for rownum in range(len(ydat)):
 			key=xdat[rownum]
+			if type(key)==type(''):
+				key=key.strip()
+			if not key: continue
 			val=ydat[rownum]
 			try:
 				vectors[key].append(val)
@@ -415,15 +418,62 @@ class RpyD2():
 				vectors[k]=ro.StrVector(v)
 				if self.factor:
 					vectors[k]=ro.FactorVector(vectors[k])
-		
 				
 		return vectors
 		
 	def _get_fn(self,x,y):
 		return '-by-'.join([y,x])
 	
-	def vioplot(self,fn=None,x='x',y='y',w=1100,h=800):
+	
+	def boxplot(self,fn=None,x=None,y=None,main=None,xlab=None,ylab=None,ggplot=False,w=1100,h=800):
+		if not (x and y):
+			self._call_remaining('boxplot',x=x,y=y)
+			return
+		
+		
+		if ggplot:
+			self.plot(fn=fn,x=x,y=y,w=w,h=h,title=main,point=False,smooth=False,boxplot2=True,col=x,group=x)
+			return
+		if fn==None: fn='boxplot.'+self._get_fn(x,y)+'.png'
+		if not main: main=fn
+		if not xlab: xlab=x
+		if not ylab: ylab=y
+		
+		grdevices = importr('grDevices')
+		grdevices.png(file=fn, width=w, height=h)
+		frmla=ro.Formula(y+'~'+x)
+		r['boxplot'](frmla,data=self.df,main=main,xlab=xlab,ylab=ylab)
+		
+		grdevices.dev_off()
+		print ">> saved: "+fn
+		
+		
+	def _call_remaining(self,function_name,x=None,y=None):
+		function=getattr(self,function_name)
+		if y and not x:
+			for col in self.cols:
+				if col==y: continue
+				try:
+					function(x=col,y=y)
+				except:
+					pass
+			return
+		elif x and not y:
+			for col in self.cols:
+				if col==x: continue
+				try:
+					function(x=x,y=col)
+				except:
+					pass
+			return
+		elif not x and not y:
+			return
+	
+	def vioplot(self,fn=None,x=None,y=None,w=1100,h=800):
 		"""API to the 'vioplot' R package: http://cran.r-project.org/web/packages/vioplot/index.html"""
+		if not (x and y):
+			self._call_remaining('vioplot',x=x,y=y)
+			return
 		
 		if fn==None:
 			fn='vioplot.'+self._get_fn(x,y)+'.png'
@@ -431,7 +481,7 @@ class RpyD2():
 		vectors=self.toVectors(x,y)
 
 		importr('vioplot')
-		grdevices = importr('grDevices')
+		
 		grdevices.png(file=fn, width=w, height=h)
 
 		r['vioplot'](*vectors.values(), names=vectors.keys(),col='gold')
@@ -498,28 +548,60 @@ class RpyD2():
 			print r['summary'](fit)
 		return fit
 
-
-	def aov(self, formula):
-		fit=r['aov'](formula,data=self.df)
-		
-		if self.toprint:
-			print r['summary'](fit)
-		return fit
-
-	def lm(self,ykey='y',toprint=True):
-
-		try:
+	def _get_frmla(self,formula,joiner='+'):
+		if not '~' in formula:
+			ykey=formula.strip()
 			keys=set(self.df.colnames)
 			ykeys=set([ykey])
 			xkeys=keys.difference(ykeys)
-			frmla=ykey+" ~ "+"+".join(xkeys)
-			fit=r['lm'](frmla,data=self.df)
-		except:
-			keys=set(self.q().df.colnames)
-			ykeys=set([ykey])
-			xkeys=keys.difference(ykeys)
-			frmla=ykey+" ~ "+"+".join(xkeys)
-			fit=r['lm'](frmla,data=self.q().df)
+			return ro.Formula(ykey+" ~ "+joiner.join(xkeys))
+		else:
+			return ro.Formula(formula)
+
+	# def manova(self,ys=[],xs=[],xjoin='*'):
+	# 	Y=r['cbind'](ys)
+	# 	#frmla=self._get_frmla(Y+'~'+xjoin.join(xs),joiner='*')
+	# 	frmla=ro.Formula(Y+'~'+xjoin.join(xs))
+	# 	
+	# 	print frmla
+	# 	fit=r['manova'](frmla,data=self.df)
+	# 	
+	# 	if self.toprint:
+	# 		print r['summary'](fit)
+	# 	
+	# 	return fit
+
+	def aov(self, formula, tukey=False, plot=False, fn=None, w=1100, h=800):
+		frmla=self._get_frmla(formula,joiner='*')
+		fit=r['aov'](frmla,data=self.df)
+		
+		if tukey:
+			tfit=r['TukeyHSD'](fit)
+		
+		
+		if self.toprint:
+			print r['summary'](fit)
+			if tukey:
+				print r['summary'](tfit)
+		
+		if plot:
+			if not fn:
+				fn = 'aov.'+str(formula)+'.png'
+			grdevices.png(file=fn, width=w, height=h)
+
+			r('layout(matrix(c(1,2,3,4),2,2))') # optional layout 
+			r['plot'](tfit) # diagnostic plots
+
+			grdevices.dev_off()
+			print ">> saved: "+fn
+			
+			
+		return fit
+
+	def lm(self,formula,toprint=True):
+		frmla=self._get_frmla(formula)
+		fit=r['lm'](frmla,data=self.df)
+
 		if self.toprint:
 			print r['summary'](fit)
 		return fit
