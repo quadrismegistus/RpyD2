@@ -46,6 +46,7 @@ class M():
 		self.nrow=0
 		self.ncol=0
 		self._quantv=None
+		self._subv={'cols':{},'rows':{},'cols_rows':{}}
 		
 		if not input: return
 		if not len(input): return
@@ -53,17 +54,14 @@ class M():
 		
 		if type(input)==type([]) and type(input[0])==type({}):
 			self._gen_LD(input)
-		elif type(input)==type(self):
-			self._gen_self(input)
-		elif type(input)==type(ro.DataFrame):
-			self._gen_DF(input)
 		elif type(input)==type({}) and type(input.values()[0]==type([])):
 			self._gen_DL(input)
+		elif type(input)==type(self):
+			self._gen_self(input)
+		elif type(input)==type(ro.DataFrame({})):
+			self._gen_DF(input)
 		else:
 			raise InputNotRecognizedError("Cannot recognize input of type "+type(input))
-		
-		for k,v in self.df.__dict__.items():
-			setattr(self,k,v)
 
 	def __str__(self):
 		return self.df.__str__()
@@ -92,19 +90,91 @@ class M():
 				rownum=self.rows.index(rowname)
 			else:
 				rownum=rowname
-			return [ self.df[i][rownum] for i in range(self.ncol)]
+				
+			l=[]
+			for colnum in range(self.ncol):
+				c=self.df[colnum]
+				if type(c)==type(ro.FactorVector([])):
+					l+=[c.levels[c[rownum] - 1]]
+				else:
+					l+=[c[rownum]]
+		
+			return l
 		except:
 			return
 	
 	
-	def toDL(self):
+	def toDL(self,cols=None,rows=None,rownamecol=False):
 		dl={}
-		for i in range(self.ncol):
-			col=self.col(i)
-			colname=self.cols[i]
-			dl[colname]=col
+		if not cols and not rows:
+			for i in range(self.ncol):
+				col=self.col(i)
+				colname=self.cols[i]
+				dl[colname]=col
+			if rownamecol:
+				dl['rownamecol']=self.df.rownames
+			
+		elif cols and not rows:
+			for col in cols:
+				dl[col]=self.col(col)
+			if rownamecol:
+				dl['rownamecol']=self.df.rownames
+			
+		elif cols and rows:
+			for col in cols:
+				dl[col]=[]
+				colnum=self.cols.index(col)
+				for row in rows:
+					rowdat=self.row(row)
+					dl[col].append(rowdat[colnum])
+			
+			if rownamecol:
+				dl['rownamecol']=[]
+				for row in rows:
+					if type(row)==type(''):
+						dl['rownamecol'].append(row)
+					else:
+						dl['rownamecol'].append(self.rows[row])
+				
+			
+		elif rows and not cols:
+			for col in self.cols:
+				dl[col]=[]
+				colnum=self.cols.index(col)
+				for row in rows:
+					rowdat=self.row(row)
+					dl[col].append(rowdat[colnum])
+					
+			if rownamecol:
+				dl['rownamecol']=[]
+				for row in rows:
+					if type(row)==type(''):
+						dl['rownamecol'].append(row)
+					else:
+						dl['rownamecol'].append(str(self.rows[row]))
+
 		return dl
+
+	
+	def sub(self,cols=[],rows=[]):
+		if cols and not rows:
+			keytup=('cols',tuple(sorted(cols)))
+		elif cols and rows:
+			keytup=('cols',tuple( tuple(sorted(cols)), tuple(sorted(rows)) ))
+		elif rows and not cols:
+			keytup=('rows',tuple(sorted(rows)))
+		elif not cols and not rows:
+			return self
 		
+		try:
+			return self._subv[keytup[0]][keytup[1]]
+		except KeyError:
+			#if bool(self.rownames):
+			m=M(self.toDL(cols,rows,rownamecol=True),rownamecol='rownamecol')
+			#else:
+			#	m=M(self.toDL(cols,rows))
+			self._subv[keytup[0]][keytup[1]]=m
+			return m
 	
 	def q(self):
 		"""Return a version of self of only quantitative columns"""
@@ -140,6 +210,9 @@ class M():
 	
 	def _gen_DL(self,dl):
 		self.origin='dl'
+		if self.rownamecol:
+			self.rownames=dl[self.rownamecol]
+			del dl[self.rownamecol]
 		self._boot_DL(dl)
 		
 	def _gen_LD(self,ld):
@@ -199,7 +272,7 @@ class M():
 
 
 
-	def plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False):
+	def plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False , xlab_size=14, ylab_size=24):
 		
 		if fn==None:
 			fn='plot.'+'.'.join([x,y])+'.png'
@@ -268,7 +341,7 @@ class M():
 			pp+=ggplot2.geom_line(position='jitter')
 
 
-		pp+=ggplot2.opts(**{'title' : title, 'axis.text.x': ggplot2.theme_text(size=24), 'axis.text.y': ggplot2.theme_text(size=24,hjust=1)} )
+		pp+=ggplot2.opts(**{'title' : title, 'axis.text.x': ggplot2.theme_text(size=xlab_size), 'axis.text.y': ggplot2.theme_text(size=ylab_size,hjust=1)} )
 		#pp+=ggplot2.scale_colour_brewer(palette="Set1")
 		pp+=ggplot2.scale_colour_hue()
 		if flip:

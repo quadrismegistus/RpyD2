@@ -1,1 +1,34 @@
-Rpy2Matrix: A python class modeled on Rpy2's DataFrame, providing convenient access to common statistical procedures in R.
+A python class modeled on Rpy2's DataFrame, providing convenient access to common statistical procedures in R.
+======
+
+Help on instance of M in module Rpy2Matrix:
+
+class M
+ |  Methods defined here:
+ |  
+ |  __init__(self, input, **kwargs)
+ |  
+ |  __repr__(self)
+ |  
+ |  __str__(self)
+ |  
+ |  aov(self, formula, toprint=True)
+ |  
+ |  ca(self, fn, cols=[], toprint=True)
+ |  
+ |  col(self, colname)
+ |  
+ |  glm(self, ykey='y', family='gaussian', anovaTest='Chisq')
+ |      API to R's glm:
+ |              http://web.njit.edu/all_topics/Prog_Lang_Docs/html/library/base/html/glm.html
+ |      
+ |      Family can be:
+ |              [ref: http://web.njit.edu/all_topics/Prog_Lang_Docs/html/library/base/html/family.html]
+ |  
+ |  lm(self, ykey='y', toprint=True)
+ |  
+ |  pca(self, fn='pca.png', col=None, w=1200, h=1200)
+ |  
+ |  plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, ji
+tter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, xlab_
+size=14, ylab_size=24)
