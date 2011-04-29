@@ -46,6 +46,8 @@ class RpyD2():
           self.factor=True                # if True, treat strings as factors
           self.onlyQuant=False            # if True, only build quantitative columns
           self.onlyCat=False              # if True, only build categorical (string) columns
+
+		  self.toprint=True				  # if True, print R objects using R's summary() before returning them
 		"""
 				
 		## set defaults
@@ -60,6 +62,7 @@ class RpyD2():
 		self.onlyQuant=False
 		self.onlyCat=False
 		self.rownames=[]
+		self.toprint=True
 		
 		## override defaults with
 		for k,v in kwargs.items():
@@ -92,7 +95,8 @@ class RpyD2():
 		return self.df.__str__()
 	
 	def __repr__(self):
-		return "<RpyD2 storing a "+str(self.ncol)+"-by-"+str(self.ncol)+"row "+self.df.__repr__()[1:-1].replace(" - "," @ ")+">"
+		loc=object.__repr__(self)[:-1].split(" at ")[1]
+		return "<RpyD2 @ "+loc+" storing a "+str(self.ncol)+"R-by-"+str(self.nrow)+"C "+self.df.__repr__()[1:-1].replace(" - "," @ ")+">"
 	
 	def col(self,colname):
 		"""Return column 'colname', where colname can be either a string name or an integer position (starting at 0)."""
@@ -312,7 +316,7 @@ class RpyD2():
 	def plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False , xlab_size=14, ylab_size=24):
 		
 		if fn==None:
-			fn='plot.'+'.'.join([x,y])+'.png'
+			fn='plot.'+self._get_fn(x,y)+'.png'
 		df=self.df
 		#import math, datetime
 		
@@ -389,19 +393,74 @@ class RpyD2():
 		pp.plot()
 		grdevices.dev_off()
 		print ">> saved: "+fn
+	
+	def toVectors(self,xcol='x',ycol='y'):
+		vectors={}
+		
+		ydat=self.col(ycol)
+		xdat=self.col(xcol)
+		for rownum in range(len(ydat)):
+			key=xdat[rownum]
+			val=ydat[rownum]
+			try:
+				vectors[key].append(val)
+			except KeyError:
+				vectors[key]=[]
+				vectors[key].append(val)
+		
+		for k,v in vectors.items():
+			try:
+				vectors[k]=ro.FloatVector(v)
+			except:
+				vectors[k]=ro.StrVector(v)
+				if self.factor:
+					vectors[k]=ro.FactorVector(vectors[k])
+		
+				
+		return vectors
+		
+	def _get_fn(self,x,y):
+		return '-by-'.join([y,x])
+	
+	def vioplot(self,fn=None,x='x',y='y',w=1100,h=800):
+		"""API to the 'vioplot' R package: http://cran.r-project.org/web/packages/vioplot/index.html"""
+		
+		if fn==None:
+			fn='vioplot.'+self._get_fn(x,y)+'.png'
+			
+		vectors=self.toVectors(x,y)
 
-	def summary(self):
-		return r['summary'](self.df)
+		importr('vioplot')
+		grdevices = importr('grDevices')
+		grdevices.png(file=fn, width=w, height=h)
+
+		r['vioplot'](*vectors.values(), names=vectors.keys(),col='gold')
+		r['title']( 'Violin (box+density) plot where y='+y+' and x='+x )
+		
+		grdevices.dev_off()
+		print ">> saved: "+fn
+		
+
+
+
+
+	def summary(self,obj=None):
+		if not obj:
+			obj=self.df
+		x=r['summary'](obj)
+		if self.toprint:
+			print x
+		return x
 		
 	def xtabs(self,cols=[]):
 		frmla='~'+'+'.join(cols)
 		return r['xtabs'](frmla,data=self.df)
 
-	def ca(self,fn,cols=[],toprint=True):
+	def ca(self,fn,cols=[]):
 		importr('ca')
 		fit=r['ca'](self.xtabs(cols))
-		if toprint:
-			print fit
+		if self.toprint:
+			print r['summary'](fit)
 		
 		r_plot(fit,fn)
 		return fit
@@ -433,14 +492,17 @@ class RpyD2():
 		print ">> saved: "+ofn
 	
 
-	def testIndependence(self,cols=[]):
-		return r['chisq.test'](self.xtabs(cols))
+	def chisq(self,cols=[]):
+		fit=r['chisq.test'](self.xtabs(cols))
+		if self.toprint:
+			print r['summary'](fit)
+		return fit
 
 
-	def aov(self, formula, toprint = True):
+	def aov(self, formula):
 		fit=r['aov'](formula,data=self.df)
 		
-		if toprint:
+		if self.toprint:
 			print r['summary'](fit)
 		return fit
 
@@ -458,7 +520,7 @@ class RpyD2():
 			xkeys=keys.difference(ykeys)
 			frmla=ykey+" ~ "+"+".join(xkeys)
 			fit=r['lm'](frmla,data=self.q().df)
-		if toprint:
+		if self.toprint:
 			print r['summary'](fit)
 		return fit
 		
@@ -617,8 +679,6 @@ def mean_stdev(x):
 
 
 def r_plot(obj,fn,w=800,h=800,xlabel="",ylabel="",label=""):
-	from rpy2.robjects.packages import importr
-	from rpy2.robjects import r
 	grdevices = importr('grDevices')
 	grdevices.png(file=fn, width=w, height=h)
 
