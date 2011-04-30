@@ -1,7 +1,7 @@
-A python class modeled on Rpy2's DataFrame, providing convenient access to common statistical procedures in R.
-======
-
-Help on instance of RpyD2 in module rpyd2:
+Warning messages:
+1: package 'ggplot2' was built under R version 2.10.1 
+2: package 'digest' was built under R version 2.10.1 
+Help on class RpyD2 in module rpyd2:
 
 class RpyD2
  |  Methods defined here:
@@ -114,3 +114,4 @@ class RpyD2
  |      API to the 'vioplot' R package: http://cran.r-project.org/web/packages/vioplot/index.html
  |  
  |  xtabs(self, cols=[])
+
