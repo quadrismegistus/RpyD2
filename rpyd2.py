@@ -97,7 +97,7 @@ class RpyD2():
 	
 	def __repr__(self):
 		loc=object.__repr__(self)[:-1].split(" at ")[1]
-		return "<RpyD2 @ "+loc+" storing a "+str(self.ncol)+"R-by-"+str(self.nrow)+"C "+self.df.__repr__()[1:-1].replace(" - "," @ ")+">"
+		return "<RpyD2 @ "+loc+" storing a "+str(self.nrow)+"x"+str(self.ncol)+" "+self.df.__repr__()[1:-1].replace(" - "," @ ")+">"
 	
 	def col(self,colname):
 		"""Return column 'colname', where colname can be either a string name or an integer position (starting at 0)."""
@@ -271,7 +271,7 @@ class RpyD2():
 		if not self.cols:
 			self.cols=getCols(ld,self.allcols,self.rownamecol)
 			if type(self.allcols)==type(2):
-				self.cols=self.trimCols(ld,self.cols,self.allcols,byVariance=self.trimbyVariance)
+				self.cols=trimCols(ld,self.cols,self.allcols,byVariance=self.trimbyVariance)
 		
 		for i in range(len(self.cols)):
 			k=self.cols[i]
@@ -720,11 +720,11 @@ class RpyD2():
 	
 		
 
-	def hclust(self,cor=False,plot=True,fn=None,w=1100,h=900):
+	def hclust(self,cor=False,z=True,plot=True,fn=None,w=1100,h=900):
 		if cor:
 			dist=self.cordist()
 		else:
-			dist=self.dist()
+			dist=self.dist(z=z)
 
 		if not fn:
 			fn='hclust.png'
@@ -736,6 +736,72 @@ class RpyD2():
 		print ">> saved: "+fn
 
 		return hclust
+
+	def treepredict(self,y='',fn='treepredict.png',w=1100,h=800):
+		importr('rpart')
+		grdevices.png(file=fn, width=w, height=h)
+		frmla=y+'~'+'+'.join([c for c in self.q().cols if c!=y])
+		fit=r['rpart'](ro.Formula(frmla),method="class",data=self.df)
+		#r['plot'](r['printcp'](fit)) # display the results
+
+
+		# plot tree 
+
+		r['plot'](fit, uniform=True,main=frmla)
+		r['text'](fit, use_n=True, all=True, cex=.8)
+		grdevices.dev_off()
+		print ">> saved: "+fn
+
+
+
+	def pvclust(self,z=True,fn='pvclust.png',w=1100,h=900):
+		"""API to R package pvclust: http://cran.r-project.org/web/packages/pvclust/index.html"""
+		importr('pvclust')
+		grdevices.png(file=fn, width=w, height=h)
+		fit=r['pvclust'](self.q(z=z).df, method_hclust="ward",method_dist="euclidean")
+		r['plot'](fit)
+		r['pvrect'](fit, alpha=0.95)
+		grdevices.dev_off()
+		print ">> saved: "+fn
+		return fit
+	
+	def predict(self,y='',z=True,fn='predict.png',w=1100,h=800):
+		"""API to pamr.train and pamr.predict:
+			http://www-stat.stanford.edu/~tibs/PAM/Rdist/pamr.train.html
+			http://rgm2.lab.nig.ac.jp/RGM2/func.php?rd_id=pamr:pamr.predict
+			"""
+		importr('pamr')
+		grdevices.png(file=fn, width=w, height=h)
+		y=ro.FactorVector(self.col(y))
+		x=self.q(z=z).df
+		data=r['list'](x=x,y=y)
+		train=r['pamr.train'](data)
+		print train
+		cv=r['pamr.cv'](train,data)
+		fit=r['pamr.predict'](train, x, threshold=1)
+		grdevices.dev_off()
+		print ">> saved: "+fn
+		return fit
+	
+	
+	def mclust(self,z=True,fn='mclust.png',w=1100,h=900):
+		
+		importr('mclust')
+		grdevices.png(file=fn, width=w, height=h)
+		
+
+		# plot(fit, mydata) # plot results 
+		# print(fit) # display the best model
+		
+		fit=r['Mclust'](self.q(z=z).df)
+
+		#r['plot'](fit, self.q(z=z).df)
+		r('layout(matrix(c(1,2,3,4),3,3))') # optional layout 
+		#r['print'](fit)
+		grdevices.dev_off()
+		print ">> saved: "+fn
+		return fit
+
 
 	def plot3d(self,fn=None,x='x',y='y',z='z',title=False,w=800,h=800):
 		if not fn:
@@ -792,7 +858,7 @@ def trimCols(ld,cols,maxcols,rank=True,byVariance=True,byFrequency=False,printSt
 	for key,score in sorted(keysums.items(),key=itemgetter(1),reverse=True):
 		print key,"\t",score
 		i+=1
-		if i>allcols:
+		if i>maxcols:
 			break
 		sumvariances+=score
 		allowedkeys.append(key)
@@ -867,10 +933,10 @@ def mean_stdev(x):
 
 
 
-def r_plot(fn,obj,w=800,h=800,xlabel="",ylabel="",label=""):
+def r_plot(fn,obj,w=800,h=800,xlab='',ylab='',main=''):
 	grdevices.png(file=fn, width=w, height=h)
 
-	r.plot(obj)
+	r.plot(obj,xlab=xlab,ylab=ylab,main=main)
 
 	grdevices.dev_off()
 	print ">> saved: "+fn
