@@ -1,7 +1,7 @@
-A python class modeled on Rpy2's DataFrame, providing convenient access to common statistical procedures in R.
-======
-
-Help on instance of RpyD2 in module rpyd2:
+Warning messages:
+1: package 'ggplot2' was built under R version 2.10.1 
+2: package 'digest' was built under R version 2.10.1 
+Help on class RpyD2 in module rpyd2:
 
 class RpyD2
  |  Methods defined here:
@@ -66,7 +66,7 @@ class RpyD2
  |      Family can be:
  |              [ref: http://web.njit.edu/all_topics/Prog_Lang_Docs/html/library/base/html/family.html]
  |  
- |  hclust(self, cor=False, plot=True, fn=None, w=1100, h=900)
+ |  hclust(self, cor=False, z=True, plot=True, fn=None, w=1100, h=900)
  |  
  |  kclust(self, k=4, z=True, plot=True, fn=None, w=1100, h=800)
  |      Currently set to return self.pam(k) for robust k-means clustering.
@@ -75,6 +75,8 @@ class RpyD2
  |      API to R's kmeans clustering function: http://stat.ethz.ch/R-manual/R-patched/library/stats/html/kmeans.html
  |  
  |  lm(self, formula, toprint=True)
+ |  
+ |  mclust(self, z=True, fn='mclust.png', w=1100, h=900)
  |  
  |  pam(self, k=4, z=True)
  |      API to R's pam function: 
@@ -86,6 +88,14 @@ class RpyD2
  |  plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, xlab_size=14, ylab_size=24)
  |  
  |  plot3d(self, fn=None, x='x', y='y', z='z', title=False, w=800, h=800)
+ |  
+ |  predict(self, y='', z=True, fn='predict.png', w=1100, h=800)
+ |      API to pamr.train and pamr.predict:
+ |      http://www-stat.stanford.edu/~tibs/PAM/Rdist/pamr.train.html
+ |      http://rgm2.lab.nig.ac.jp/RGM2/func.php?rd_id=pamr:pamr.predict
+ |  
+ |  pvclust(self, z=True, fn='pvclust.png', w=1100, h=900)
+ |      API to R package pvclust: http://cran.r-project.org/web/packages/pvclust/index.html
  |  
  |  q(self, z=False)
  |      Return a version of self of only quantitative columns
@@ -110,7 +120,10 @@ class RpyD2
  |  
  |  toVectors(self, xcol='x', ycol='y')
  |  
+ |  treepredict(self, y='', fn='treepredict.png', w=1100, h=800)
+ |  
  |  vioplot(self, fn=None, x=None, y=None, w=1100, h=800)
  |      API to the 'vioplot' R package: http://cran.r-project.org/web/packages/vioplot/index.html
  |  
  |  xtabs(self, cols=[])
+
