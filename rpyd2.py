@@ -74,6 +74,7 @@ class RpyD2():
 		self.nrow=0
 		self.ncol=0
 		self._quantv=None
+		self._quantvz=None
 		self._subv={'cols':{},'rows':{},'cols_rows':{}}
 		
 		if not input: return
@@ -217,16 +218,23 @@ class RpyD2():
 			self._subv[keytup[0]][keytup[1]]=m
 			return m
 	
-	def q(self):
+	def q(self,z=False):
 		"""Return a version of self of only quantitative columns"""
 		if self.onlyQuant:
 			return self
 		
-		if self._quantv!=None:
+		
+		if not z and self._quantv!=None:
 			return self._quantv
+		elif z and self._quantvz!=None:
+			return self._quantvz
 				
-		self._quantv=RpyD2(self.toDL(),rownames=self.rownames,onlyQuant=True)
-		return self._quantv
+		r=RpyD2(self.toDL(),rownames=self.rownames,onlyQuant=True,z=z)
+		if z:
+			self._quantvz=r
+		else:
+			self._quantv=r
+		return r
 	
 	
 	def _is_quant_num(self,num):
@@ -512,7 +520,7 @@ class RpyD2():
 		if self.toprint:
 			print r['summary'](fit)
 		
-		r_plot(fit,fn)
+		r_plot(fn,fit)
 		return fit
 	
 	
@@ -643,6 +651,91 @@ class RpyD2():
 		
 		#r['ls.print'](lm)
 
+	
+	
+	
+	## DISTANCE MEASURES
+
+	def corrgram(self,fn=None,w=1600,h=1600):
+		"""API to corrgram package:
+		"""
+		importr('corrgram')
+		if not fn:
+			fn='corrgram.png'
+		grdevices.png(file=fn, width=w, height=h)
+		r['corrgram'](self.q().df,lower_panel='panel.shade',upper_panel='panel.pts')
+		grdevices.dev_off()
+		print ">> saved: "+fn
+
+
+	def dist(self,z=False):
+		return r['dist'](self.q(z).df)
+
+
+	def kclust(self,k=4,z=True,plot=True,fn=None,w=1100,h=800):
+		""" Currently set to return self.pam(k) for robust k-means clustering."""
+		fit=self.pam(k=k,z=z)
+		
+		if plot:
+			importr('cluster')
+			if not fn:
+				fn='kclust.'+str(k).zfill(2)+'.z'+str(z)+'.png'
+			grdevices.png(file=fn, width=w, height=h)
+			r['clusplot'](fit,color=True, shade=True, labels=2, lines=0, main=fn)
+			grdevices.dev_off()
+			print ">> saved: "+fn
+
+		return fit
+		
+		
+		
+	def pam(self,k=4,z=True):
+		"""API to R's pam function: 
+			http://stat.ethz.ch/R-manual/R-patched/library/cluster/html/pam.html
+		A more robust version of k-means clustering, 'around medoids.'
+		"""
+		return r['pam'](self.q(z=z).dist(),k)
+
+
+	def kmeans(self,k=4):
+		"""API to R's kmeans clustering function: http://stat.ethz.ch/R-manual/R-patched/library/stats/html/kmeans.html"""
+		fit=r['kmeans'](self.q().df, k)
+		if self.toprint:
+			print fit	
+		
+		return fit
+
+	def cor(self):
+		return r['cor'](self.q())
+		
+	def cordist(self):
+		c=self.cor()
+		for row_i in xrange(1, c.nrow+1):
+		    for col_i in xrange(1, c.ncol+1):
+				key=ro.rlc.TaggedList((row_i,col_i))
+				x=list(c.rx[key])[0]
+				c.rx[key] = (1-x)/2
+		return r['as.dist'](c)
+	
+		
+
+	def hclust(self,cor=False,plot=True,fn=None,w=1100,h=900):
+		if cor:
+			dist=self.cordist()
+		else:
+			dist=self.dist()
+
+		if not fn:
+			fn='hclust.png'
+
+		hclust=r['hclust'](dist)
+		grdevices.png(file=fn, width=w, height=h)
+		r['plot'](hclust)
+		grdevices.dev_off()
+		print ">> saved: "+fn
+
+		return hclust
+
 
 
 
@@ -760,8 +853,7 @@ def mean_stdev(x):
 
 
 
-def r_plot(obj,fn,w=800,h=800,xlabel="",ylabel="",label=""):
-	grdevices = importr('grDevices')
+def r_plot(fn,obj,w=800,h=800,xlabel="",ylabel="",label=""):
 	grdevices.png(file=fn, width=w, height=h)
 
 	r.plot(obj)
@@ -799,3 +891,19 @@ def zfy(tfdict,limit=None):
 		return zdictz
 	else:
 		return tfdict
+
+
+
+"""
+TODO:
+	t-test
+		http://www.statmethods.net/stats/ttest.html
+		http://stat.ethz.ch/R-manual/R-patched/library/stats/html/t.test.html
+		
+	hist/density
+		http://www.statmethods.net/graphs/density.html
+		
+	
+
+
+"""
