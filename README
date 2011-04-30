@@ -1,8 +1,3 @@
-Warning messages:
-1: package 'ggplot2' was built under R version 2.10.1 
-2: package 'digest' was built under R version 2.10.1 
-Help on class RpyD2 in module rpyd2:
-
 class RpyD2
  |  Methods defined here:
  |  
