@@ -694,6 +694,7 @@ class RpyD2():
 			http://stat.ethz.ch/R-manual/R-patched/library/cluster/html/pam.html
 		A more robust version of k-means clustering, 'around medoids.'
 		"""
+		importr('cluster')
 		return r['pam'](self.q(z=z).dist(),k)
 
 
@@ -706,7 +707,7 @@ class RpyD2():
 		return fit
 
 	def cor(self):
-		return r['cor'](self.q())
+		return r['cor'](self.q().df)
 		
 	def cordist(self):
 		c=self.cor()
@@ -736,7 +737,20 @@ class RpyD2():
 
 		return hclust
 
+	def plot3d(self,fn=None,x='x',y='y',z='z',title=False,w=800,h=800):
+		if not fn:
+			fn='plot3d.'+'.'.join([x,y,z])+'.png'
 
+		grdevices.png(file=fn, width=w, height=h)
+
+		r = ro.r
+		importr('scatterplot3d')
+		s3d=r['scatterplot3d'](ro.FloatVector(self.col(x)),ro.FloatVector(self.col(y)),ro.FloatVector(self.col(z)),type="h",main=title,highlight_3d=True,xlab=x,ylab=y,zlab=z)
+		#fit=self.lm(z+'~'+y+'+'+x)
+		#s3d.plane3d(fit)
+
+		grdevices.dev_off()
+		print ">> saved: "+fn
 
 
 
