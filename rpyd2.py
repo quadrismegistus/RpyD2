@@ -3,20 +3,25 @@ RpyD2
 depends:
 	rpy2  <http://rpy.sourceforge.net/rpy2.html>
 """
-
-
 from rpy2 import robjects as ro
 r = ro.r
 from rpy2.robjects.packages import importr
-import rpy2.robjects.lib.ggplot2 as ggplot2
 grdevices = importr('grDevices')
-
+rprint = ro.globalenv.get("print")
 
 class InputNotRecognizedError(Exception):
 	pass
 
-
-
+def load(fn):
+	import pickle
+	d,df=pickle.load(open(fn))
+	r=RpyD2([])
+	r.__dict__=d
+	for k,v in d.items():
+		setattr(r,k,v)
+	r.df=ro.DataFrame(df)
+	return r
+	
 
 class RpyD2():
 	def __init__(self,input,**kwargs):
@@ -198,6 +203,13 @@ class RpyD2():
 
 		return dl
 
+	def save(self,fn=None):
+		if not fn: 
+			import time
+			fn=".".join( [ 'rpyd2', time.strftime('%Y%m%d.%H%M.%S', time.gmtime()) , 'pickle' ] )
+		import pickle
+		pickle.dump((self.__dict__,self.df),open(fn,'wb'))
+		print ">> saved:",fn
 	
 	def sub(self,cols=[],rows=[]):
 		"""Return an RpyD2 from self, with only those rows and/or columns as specified."""
@@ -321,7 +333,7 @@ class RpyD2():
 
 
 
-	def plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False , xlab_size=14, ylab_size=24):
+	def plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=24):
 		
 		if fn==None:
 			fn='plot.'+self._get_fn(x,y)+'.png'
@@ -334,6 +346,8 @@ class RpyD2():
 		if not title:
 			title=fn.split("/")[-1]
 
+		import rpy2.robjects.lib.ggplot2 as ggplot2
+		
 		grdevices.png(file=fn, width=w, height=h)
 		gp = ggplot2.ggplot(df)
 		pp = gp	
@@ -388,6 +402,10 @@ class RpyD2():
 
 		if line:
 			pp+=ggplot2.geom_line(position='jitter')
+		
+		if bar:
+			pp+=ggplot2.geom_area(ggplot2.aes_string(x=x,y=y,fill=col))
+	
 
 
 		pp+=ggplot2.opts(**{'title' : title, 'axis.text.x': ggplot2.theme_text(size=xlab_size), 'axis.text.y': ggplot2.theme_text(size=ylab_size,hjust=1)} )
@@ -491,8 +509,10 @@ class RpyD2():
 		importr('vioplot')
 		
 		grdevices.png(file=fn, width=w, height=h)
+		vvals=vectors.values()
+		vkeys=vectors.keys()
 
-		r['vioplot'](*vectors.values(), names=vectors.keys(),col='gold')
+		r['vioplot'](*vvals,**{'names':vkeys,'col':'gold'})
 		r['title']( 'Violin (box+density) plot where y='+y+' and x='+x )
 		
 		grdevices.dev_off()
@@ -605,6 +625,138 @@ class RpyD2():
 			
 			
 		return fit
+	
+	def polyplot(self,terms):
+		pass
+	
+	def addCol(self,name,vals):
+		dl=self.toDL()
+		try:
+			dl[name]=ro.FloatVector(vals)
+		except:
+			dl[name]=ro.StrVector(vals)
+			if self.factor:
+				dl[name]=ro.FactorVector(dl[name])
+		
+		self.rownames=self.rows
+		self._boot_DL(dl,rownames=True)
+	
+	def removeCol(self,name):
+		dl=self.toDL()
+		del dl[name]
+		self.rownames=self.rows
+		self._boot_DL(dl,rownames=True)
+		
+	def group(self,x,ys=[],yname='y',ytype='y_type'):
+		ld=[]
+		if not ys:
+			ys=[i for i in range(len(self.cols)) if self.cols[i]!=x]
+		else:
+			ys=[self.cols.index(yk) for yk in ys]
+
+		xi=self.cols.index(x)
+		for row in self.rows:
+			xv=self.row(row)[xi]
+			for yi in ys:
+				d={}
+				d[x]=xv
+				d[yname]=self.row(row)[yi]
+				d[ytype]=self.cols[yi]
+				ld.append(d)
+		
+		return RpyD2(ld)
+	
+	def sub_where(self,rows={}):
+		r=self.sub(rows=self.rows_where(rows))
+		for k in rows:
+			r.removeCol(k)
+		return r
+	
+	def polyfits(self,x,y,degs,addCol=True,fn=None,onlyBest=False):
+		ldn=[]
+		if fn==None:
+			fn='polyfit.'+self._get_fn(x,y)+'.png'
+		for i in degs:
+			fit=self.polyfit(x,y,i)
+			dd={}
+			dd['deg']=i
+			dd['sum_residuals']=sum(fit['ryanresid'])
+			ldn.append(dd)
+
+		rn=RpyD2(ldn)
+		rn.plot('polyfit.'+fn.replace('.png','.residuals.png'), x='deg',y='sum_residuals',line=True,point=True,smooth=False)
+		
+		if addCol:
+			if onlyBest:
+				res=rn.col('sum_residuals')
+				lres=None
+				besti=0
+				for i in range(len(res)):
+					if not lres:
+						lres=res[i]
+						continue
+					if res[i]>=lres:
+						break
+					#if res[i]<lres:
+					besti=i
+					lres=res[i]
+				best=str(int(rn.col('deg')[besti]))
+				#rg=self.group('cnum',['polyfit_'+best.zfill(2),'polyfit_'+best.zfill(2)+'_1drv',y])
+				rg=self.group('cnum',['polyfit_'+best.zfill(2),y])
+			else:
+				rg=self.group('cnum')
+			rg.plot('polyfit.'+fn, x='cnum', y='y', col='y_type',group='y_type',line=True,point=True,smooth=False)
+		
+	
+	
+	def polyfit(self,x,y,deg=3,addCol=True,addDer=True):
+		import numpy as np
+		#print ">> fitting word: "+word
+
+		xs=self.col(x)
+		ys=self.col(y)
+		x=np.array(xs)
+		y=np.array(ys)
+
+		fit=np.polyfit(x,y,deg,full=True)
+		f=np.poly1d(fit[0])
+		f2=np.polyder(f)
+		if addCol:
+			self.addCol('polyfit_'+str(deg).zfill(2),[f(x) for x in xs])
+			#self.addCol('polyfit_'+str(deg).zfill(2)+'_1drv',[f2(x) for x in xs])
+		
+		fitd={}
+		fitd['coeff']=fit[0]
+		fitd['resid']=fit[1]
+		fitd['ryanresid']=[ abs(ys[i]-f(xs[i])) for i in range(len(ys)) ]
+		fitd['rank']=fit[2]
+		fitd['singval']=fit[3]
+		fitd['rcond']=fit[4]
+		return fitd
+
+	def rows_where(self,qdict):
+		rowsIncl=[]
+		
+		qdict2={}
+		for k,v in qdict.items():
+			try:
+				if type(k)!=type(0):
+					colnum=self.cols.index(k)
+				else:
+					colnum=k
+				qdict2[colnum]=v
+			except:
+				continue
+		if not qdict2: return
+		for row in self.rows:
+			rowdat=self.row(row)
+			include=True
+			for k,v in qdict2.items():
+				if rowdat[k]!=v: include=False
+			if include:
+				rowsIncl.append(row)
+		return rowsIncl
+
 
 	def lm(self,formula,toprint=True):
 		frmla=self._get_frmla(formula)
@@ -614,6 +766,13 @@ class RpyD2():
 			print r['summary'](fit)
 		return fit
 		
+
+	def loess(self,formula,toprint=True):
+		frmla=self._get_frmla(formula)
+		fit=r['loess'](frmla,data=self.df)
+		if self.toprint:
+			print r['summary'](fit)
+		return fit
 
 	def glm(self,ykey='y',family='gaussian',anovaTest='Chisq'):
 		"""
@@ -803,6 +962,47 @@ class RpyD2():
 		return fit
 
 
+	def points_3d(self,fn=None,x='x',y='y',z='z',title=False,w=800,h=800):
+		if not fn: fn='3d_points.'+'.'.join([x,y,z])+'.png'
+		grdevices.png(file=fn, width=w, height=h)
+		r = ro.r
+		rgl=importr('rgl')
+		#dev=r('rgl.open()')
+		
+		selfdl=self.toDL()
+		dl={}
+		dl['x']=selfdl[x]
+		dl['y']=selfdl[y]
+		dl['z']=selfdl[z]
+		rp=RpyD2(dl)
+		
+		print rp.df
+		
+		xs=self.col(x)
+		ys=self.col(y)
+		zs=self.col(z)
+		#r('open3d()')
+		plot=r['points3d'](rp.df)
+			
+		#rprint(plot)
+		
+		#r['rgl.snapshot'](fn)
+		grdevices.dev_off()
+		r_plot(fn,plot)
+		#print ">> saved: "+fn
+
+
+	def cloud(self,fn=None,x='x',y='y',z='z',title=False,w=800,h=800):
+		if not fn: fn='cloud.'+'.'.join([x,y,z])+'.png'
+		grdevices.png(file=fn, width=w, height=h)
+		r = ro.r
+		importr('lattice')
+		plot=r['cloud'](ro.Formula(z+'~'+y+'+'+x), self.df, scales = r('list(arrows = FALSE)'))
+		rprint(plot)
+		grdevices.dev_off()
+		print ">> saved: "+fn
+
+
 	def plot3d(self,fn=None,x='x',y='y',z='z',title=False,w=800,h=800):
 		if not fn:
 			fn='plot3d.'+'.'.join([x,y,z])+'.png'
@@ -810,14 +1010,17 @@ class RpyD2():
 		grdevices.png(file=fn, width=w, height=h)
 
 		r = ro.r
-		importr('scatterplot3d')
-		s3d=r['scatterplot3d'](ro.FloatVector(self.col(x)),ro.FloatVector(self.col(y)),ro.FloatVector(self.col(z)),type="h",main=title,highlight_3d=True,xlab=x,ylab=y,zlab=z)
+		importr('lattice')
+		#importr('scatterplot3d')
+		#s3d=r['scatterplot3d'](ro.FloatVector(self.col(x)),ro.FloatVector(self.col(y)),ro.FloatVector(self.col(z)),type="h",main=title,highlight_3d=True,xlab=x,ylab=y,zlab=z)
+		
+		plot=r['wireframe'](ro.Formula(z+'~'+y+'*'+x), self.df, colorkey = True)
+		rprint(plot)
 		#fit=self.lm(z+'~'+y+'+'+x)
 		#s3d.plane3d(fit)
 
 		grdevices.dev_off()
 		print ">> saved: "+fn
-
 
 
 def trimCols(ld,cols,maxcols,rank=True,byVariance=True,byFrequency=False,printStats=True):
@@ -987,3 +1190,20 @@ TODO:
 
 
 """
+
+def str_polyfunc(coefficients):
+	frmla=[]
+	import decimal
+	deg=len(coefficients)-1
+	for i in range(len(coefficients)):
+		term=str(decimal.Decimal(str(coefficients[i])))
+		power=deg-i
+		if power:
+			term+='*x^'+str(deg-i)
+		frmla+=[ term ]
+	frmla=' + '.join(frmla)
+	return frmla
+
+def make_polyfunc(coefficients):
+	l=[(coefficients[i],(len(coefficients)-1-i)) for i in range(len(coefficients))]
+	return lambda x: sum([t[0]*(x**t[1]) for t in l])
