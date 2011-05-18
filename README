@@ -34,6 +34,8 @@ class RpyD2
  |  
  |  __str__(self)
  |  
+ |  addCol(self, name, vals)
+ |  
  |  aov(self, formula, tukey=False, plot=False, fn=None, w=1100, h=800)
  |  
  |  boxplot(self, fn=None, x=None, y=None, main=None, xlab=None, ylab=None, ggplot=False, w=1100, h=800)
@@ -41,6 +43,8 @@ class RpyD2
  |  ca(self, fn, cols=[])
  |  
  |  chisq(self, cols=[])
+ |  
+ |  cloud(self, fn=None, x='x', y='y', z='z', title=False, w=800, h=800)
  |  
  |  col(self, colname)
  |      Return column 'colname', where colname can be either a string name or an integer position (starting at 0).
@@ -61,6 +65,8 @@ class RpyD2
  |      Family can be:
  |              [ref: http://web.njit.edu/all_topics/Prog_Lang_Docs/html/library/base/html/family.html]
  |  
+ |  group(self, x, ys=[], yname='y', ytype='y_type')
+ |  
  |  hclust(self, cor=False, z=True, plot=True, fn=None, w=1100, h=900)
  |  
  |  kclust(self, k=4, z=True, plot=True, fn=None, w=1100, h=800)
@@ -71,6 +77,8 @@ class RpyD2
  |  
  |  lm(self, formula, toprint=True)
  |  
+ |  loess(self, formula, toprint=True)
+ |  
  |  mclust(self, z=True, fn='mclust.png', w=1100, h=900)
  |  
  |  pam(self, k=4, z=True)
@@ -80,9 +88,17 @@ class RpyD2
  |  
  |  pca(self, fn='pca.png', col=None, w=1200, h=1200)
  |  
- |  plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, xlab_size=14, ylab_size=24)
+ |  plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=24)
  |  
  |  plot3d(self, fn=None, x='x', y='y', z='z', title=False, w=800, h=800)
+ |  
+ |  points_3d(self, fn=None, x='x', y='y', z='z', title=False, w=800, h=800)
+ |  
+ |  polyfit(self, x, y, deg=3, addCol=True, addDer=True)
+ |  
+ |  polyfits(self, x, y, degs, addCol=True, fn=None, onlyBest=False)
+ |  
+ |  polyplot(self, terms)
  |  
  |  predict(self, y='', z=True, fn='predict.png', w=1100, h=800)
  |      API to pamr.train and pamr.predict:
@@ -95,11 +111,19 @@ class RpyD2
  |  q(self, z=False)
  |      Return a version of self of only quantitative columns
  |  
+ |  removeCol(self, name)
+ |  
  |  row(self, rowname)
  |      Return row 'rowname', where rowname can be either a string name or an integer position (starting at 0).
  |  
+ |  rows_where(self, qdict)
+ |  
+ |  save(self, fn=None)
+ |  
  |  sub(self, cols=[], rows=[])
  |      Return an RpyD2 from self, with only those rows and/or columns as specified.
+ |  
+ |  sub_where(self, rows={})
  |  
  |  summary(self, obj=None)
  |  
