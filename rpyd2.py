@@ -80,7 +80,9 @@ class RpyD2():
 		self.ncol=0
 		self._quantv=None
 		self._quantvz=None
+		self._tv=None
 		self._subv={'cols':{},'rows':{},'cols_rows':{}}
+		self._groupv={}
 		
 		if not input: return
 		if not len(input): return
@@ -140,6 +142,11 @@ class RpyD2():
 		except:
 			return
 	
+	def t(self):
+		if not self._tv:
+			self._tv=RpyD2(r['as.data.frame'](r['t'](self.df)))
+			self._tv.rownames=list(self._tv.df.rownames)
+		return self._tv
 	
 	def toDL(self,cols=None,rows=None,rownamecol=False):
 		"""
@@ -304,7 +311,9 @@ class RpyD2():
 				dd[k].append(value)
 		
 		self._boot_DL(dd)
-		
+	
+	def _gen_DF(self,df):
+		self._set_DF(df)
 
 	def _boot_DL(self,dl,rownames=None):
 		dd={}
@@ -320,7 +329,10 @@ class RpyD2():
 				
 				dd[k]=ro.FloatVector(v)		
 		df=ro.DataFrame(dd)
+		self._set_DF(df)
 		
+
+	def _set_DF(self,df):
 		if self.rownames:
 			df.rownames=ro.FactorVector(self.rownames)
 			#del self.rownames
@@ -330,10 +342,53 @@ class RpyD2():
 		self.cols=list(self.df.colnames)
 		self.rows=list(self.df.rownames)
 
+	def rankcols(self,byVariance=False,returnSums=False):
+		ranks={}
+		for colname in self.cols:
+			col=self.col(colname)
+			if byVariance:
+				rankcol=sum([abs(x) for x in zfy(col)])
+			else:
+				rankcol=sum(col)
+			ranks[colname]=rankcol
+		
+		keys=sorted(ranks,key=lambda item: -ranks[item])
+		if not returnSums:
+			return keys
+		return (keys,[ranks[k] for k in keys])
+		
+		
+			
+	def plots(self,x=None,y=None,n=1):
+		if not y: y=self.rankcols()
+		if not n or n==1:
+			if type(y)==type([]):
+				for ykey in y:
+					self.plot(x=x,y=y)
+			else:
+				self.plot(x=x,y=y)
+			return
+		
+		# else, stepwise
+		a=None
+		lc=len(str(self.ncol))
+		#rg=self.group(x=x,ys=y)
+		for b in range(0,len(y),n):
+			if a==None:
+				a=b
+				continue
+			print a,b
+			
+			sub=self.group(ys=y[a:b],x=x)
+			#sub=self.sub_where(rows={'y_type':y[a:b]})
+			
+			abk=str(a).zfill(lc)+'-'+str(b).zfill(lc)
+			sub.plot(fn='plots.'+abk+'.'+self._get_fn(x,"+".join(y[a:b]))+'.png',x='row',y='y',col='y_type',group='y_type',smooth=False,line=True)
+			a=b
+		return
+		
 
-
-
-	def plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=24):
+	def plot(self, fn=None, x=None, y=None, col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14):
 		
 		if fn==None:
 			fn='plot.'+self._get_fn(x,y)+'.png'
@@ -349,16 +404,32 @@ class RpyD2():
 		import rpy2.robjects.lib.ggplot2 as ggplot2
 		
 		grdevices.png(file=fn, width=w, height=h)
+		if not x:
+			if df.rownames[0].isdigit():
+				df.x=ro.FloatVector([float(x) for x in list(df.rownames)])
+			else:
+				df.x=df.rownames
+			x='x'
+
 		gp = ggplot2.ggplot(df)
-		pp = gp	
-		if col and group:
-			pp+=ggplot2.aes_string(x=x, y=y,col=col,group=group)
-		elif col:
-			pp+=ggplot2.aes_string(x=x, y=y,col=col)
-		elif group:
-			pp+=ggplot2.aes_string(x=x, y=y,group=group)
+		pp = gp
+		
+		if x and y:
+			if col and group:
+				pp+=ggplot2.aes_string(x=x, y=y,col=col,group=group)
+			elif col:
+				pp+=ggplot2.aes_string(x=x, y=y,col=col)
+			elif group:
+				pp+=ggplot2.aes_string(x=x, y=y,group=group)
+			else:
+				pp+=ggplot2.aes_string(x=x, y=y)
 		else:
-			pp+=ggplot2.aes_string(x=x, y=y)	
+			boxplot=False
+			point=False
+			boxplot2=False
+			smooth=False
+			line=False
+			bar=False	
 
 		if boxplot:
 			if col:
@@ -398,7 +469,7 @@ class RpyD2():
 					pp+=ggplot2.stat_smooth(col='blue',size=1,se=se)
 
 		if density:
-			pp+=ggplot2.geom_density(ggplot2.aes_string(x=x,y='..count..'))
+			pp+=ggplot2.geom_histogram(ggplot2.aes_string(x=x,y='..count..'))
 
 		if line:
 			pp+=ggplot2.geom_line(position='jitter')
@@ -448,7 +519,20 @@ class RpyD2():
 		return vectors
 		
 	def _get_fn(self,x,y):
-		return '-by-'.join([y,x])
+		if y:
+			if type(y)==type([]):
+				y='+'.join(y)
+			elif type(y)!=type(''):
+				y=str(y)
+			
+		if x and y:
+			return '-by-'.join([y,x])
+		elif x:
+			return x
+		elif y:
+			return y
+		else:
+			return "_x,y_"
 	
 	
 	def boxplot(self,fn=None,x=None,y=None,main=None,xlab=None,ylab=None,ggplot=False,w=1100,h=800):
@@ -647,24 +731,44 @@ class RpyD2():
 		self.rownames=self.rows
 		self._boot_DL(dl,rownames=True)
 		
-	def group(self,x,ys=[],yname='y',ytype='y_type'):
+	def group(self,x=None,ys=[],yname='y',ytype='y_type'):
 		ld=[]
 		if not ys:
-			ys=[i for i in range(len(self.cols)) if self.cols[i]!=x]
-		else:
+			if x:
+				ys=[i for i in range(len(self.cols)) if self.cols[i]!=x]
+			else:
+				ys=self.cols
+		
+		if type(ys[0])!=type(0):
 			ys=[self.cols.index(yk) for yk in ys]
-
-		xi=self.cols.index(x)
+		
+		gk=(x,tuple(ys))
+		
+		try:
+			return self._groupv[gk]
+		except KeyError:
+			pass
+		xk='row'
+		if x:
+			xi=self.cols.index(x)
 		for row in self.rows:
-			xv=self.row(row)[xi]
+			if x:
+				xv=self.row(row)[xi]
+			else:
+				xv=row
+			
+			if xv.isdigit():
+				xv=float(xv)
+			
 			for yi in ys:
 				d={}
-				d[x]=xv
+				d[xk]=xv
 				d[yname]=self.row(row)[yi]
 				d[ytype]=self.cols[yi]
 				ld.append(d)
-		
-		return RpyD2(ld)
+
+		self._groupv[gk]=RpyD2(ld)
+		return self._groupv[gk]
 	
 	def sub_where(self,rows={}):
 		r=self.sub(rows=self.rows_where(rows))
@@ -752,7 +856,10 @@ class RpyD2():
 			rowdat=self.row(row)
 			include=True
 			for k,v in qdict2.items():
-				if rowdat[k]!=v: include=False
+				if type(v)==type([]):
+					if not rowdat[k] in v: include=False
+				else:
+					if rowdat[k]!=v: include=False
 			if include:
 				rowsIncl.append(row)
 		return rowsIncl
@@ -865,11 +972,17 @@ class RpyD2():
 		
 		return fit
 
-	def cor(self):
-		return r['cor'](self.q().df)
+	def cor(self,returnType='rpyd2'):	# returnType options: None, 'df'/'dataframe', 'rpyd2'
+		x=r['cor'](self.q().df)
+		if not returnType: return x
+		df=r['as.data.frame'](x)
+		
+		if returnType.startswith('d'):
+			return df
+		return RpyD2(df)
 		
 	def cordist(self):
-		c=self.cor()
+		c=self.cor(returnType=None)
 		for row_i in xrange(1, c.nrow+1):
 		    for col_i in xrange(1, c.ncol+1):
 				key=ro.rlc.TaggedList((row_i,col_i))
@@ -877,7 +990,27 @@ class RpyD2():
 				c.rx[key] = (1-x)/2
 		return r['as.dist'](c)
 	
+	
+	def distro(self,fn=None):
+		cols,sums=self.rankcols(returnSums=True)
+		lc=len(str(len(cols)))
 		
+		dl={}
+		dl['sums']=sums
+		dl['cols']=['r'+str(i).zfill(lc)+cols[i] for i in range(len(cols))]
+		
+		r=RpyD2(dl)
+		if not fn: fn='distro.png'
+		r.plot(fn=fn.replace('.png','.cols.png'),x='sums',y='cols',point=True,smooth=False)
+		r.plot(fn=fn.replace('.png','.density.png'),x='sums',density=True)
+		
+		return r
+	
+	
+	def csv(self,fn='csv.txt',sep='\t'):
+		self.df.to_csvfile(fn,sep=sep)
+		print ">> saved: "+fn
+	
 
 	def hclust(self,cor=False,z=True,plot=True,fn=None,w=1100,h=900):
 		if cor:
@@ -1021,6 +1154,23 @@ class RpyD2():
 
 		grdevices.dev_off()
 		print ">> saved: "+fn
+
+	def mean_stdev(self,cols=[],rows=[]):
+		if rows or cols:
+			x=self.sub(cols=cols,rows=rows)
+		else:
+			x=self
+		data=[]
+		for icol in range(self.ncol):
+			data.extend(self.col(icol))
+		
+		return mean_stdev(data)
+
+
+
+
+
+
 
 
 def trimCols(ld,cols,maxcols,rank=True,byVariance=True,byFrequency=False,printStats=True):
