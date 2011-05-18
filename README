@@ -1,3 +1,5 @@
+Help on class RpyD2 in module rpyd2:
+
 class RpyD2
  |  Methods defined here:
  |  
@@ -49,14 +51,18 @@ class RpyD2
  |  col(self, colname)
  |      Return column 'colname', where colname can be either a string name or an integer position (starting at 0).
  |  
- |  cor(self)
+ |  cor(self, returnType='rpyd2')
  |  
  |  cordist(self)
  |  
  |  corrgram(self, fn=None, w=1600, h=1600)
  |      API to corrgram package:
  |  
+ |  csv(self, fn='csv.txt', sep='\t')
+ |  
  |  dist(self, z=False)
+ |  
+ |  distro(self, fn=None)
  |  
  |  glm(self, ykey='y', family='gaussian', anovaTest='Chisq')
  |      API to R's glm:
@@ -65,7 +71,7 @@ class RpyD2
  |      Family can be:
  |              [ref: http://web.njit.edu/all_topics/Prog_Lang_Docs/html/library/base/html/family.html]
  |  
- |  group(self, x, ys=[], yname='y', ytype='y_type')
+ |  group(self, x=None, ys=[], yname='y', ytype='y_type')
  |  
  |  hclust(self, cor=False, z=True, plot=True, fn=None, w=1100, h=900)
  |  
@@ -81,6 +87,8 @@ class RpyD2
  |  
  |  mclust(self, z=True, fn='mclust.png', w=1100, h=900)
  |  
+ |  mean_stdev(self, cols=[], rows=[])
+ |  
  |  pam(self, k=4, z=True)
  |      API to R's pam function: 
  |              http://stat.ethz.ch/R-manual/R-patched/library/cluster/html/pam.html
@@ -88,9 +96,11 @@ class RpyD2
  |  
  |  pca(self, fn='pca.png', col=None, w=1200, h=1200)
  |  
- |  plot(self, fn=None, x='x', y='y', col=None, group=None, w=1100, h=800, size=2, smooth=True, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=24)
+ |  plot(self, fn=None, x=None, y=None, col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14)
  |  
  |  plot3d(self, fn=None, x='x', y='y', z='z', title=False, w=800, h=800)
+ |  
+ |  plots(self, x=None, y=None, n=1)
  |  
  |  points_3d(self, fn=None, x='x', y='y', z='z', title=False, w=800, h=800)
  |  
@@ -111,6 +121,8 @@ class RpyD2
  |  q(self, z=False)
  |      Return a version of self of only quantitative columns
  |  
+ |  rankcols(self, byVariance=False, returnSums=False)
+ |  
  |  removeCol(self, name)
  |  
  |  row(self, rowname)
@@ -126,6 +138,8 @@ class RpyD2
  |  sub_where(self, rows={})
  |  
  |  summary(self, obj=None)
+ |  
+ |  t(self)
  |  
  |  toDL(self, cols=None, rows=None, rownamecol=False)
  |      Return a dictionary of lists representation of self:
