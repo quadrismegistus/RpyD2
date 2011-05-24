@@ -349,7 +349,7 @@ class RpyD2():
 			if byVariance:
 				rankcol=sum([abs(x) for x in zfy(col)])
 			else:
-				rankcol=sum(col)
+				rankcol=median(col)
 			ranks[colname]=rankcol
 		
 		keys=sorted(ranks,key=lambda item: -ranks[item])
@@ -942,6 +942,16 @@ class RpyD2():
 		grdevices.dev_off()
 		print ">> saved: "+fn
 
+	def cormean(self):
+		c=self.cor(returnType='r')
+		#print c.mean_stdev()[0]
+		return c.mean_stdev()[0]
+		#return mean_stdev([x for x in c.flatten() if x > 0])[0]
+	
+	def cormedian(self):
+		c=self.cor(returnType='r')
+		#print c.median()
+		return c.median()
 
 	def dist(self,z=False,cor=False):
 		if not cor:
@@ -949,6 +959,27 @@ class RpyD2():
 		else:
 			return self.cordist()
 
+	def corclust(self,pr=None):
+		if not pr: pr=signcorr(len(self.rows))
+		print ">> PR:",pr
+		
+		for k in range(2,len(self.cols)):
+			print ">> trying:",k
+			rs=self.kclust(k=k,cor=True,rsplit=True,plot=False)
+			success=True
+			for r in rs.values():
+				#prnow=r.cormedian()
+				prnow=lowerq(r.cor(returnType='r').flatten())
+				print prnow,
+				if prnow<pr:
+					success=False
+					print 'X...'
+					break
+				print
+			if success:
+				break
+		return rs
+			
 
 	def kclust(self,k=4,rsplit=False,cor=False,z=True,plot=True,fn=None,w=1100,h=800):
 		""" Currently set to return self.pam(k) for robust k-means clustering."""
@@ -1012,12 +1043,8 @@ class RpyD2():
 		
 	def cordist(self):
 		c=self.cor(returnType=None)
-		for row_i in xrange(1, c.nrow+1):
-		    for col_i in xrange(1, c.ncol+1):
-				key=ro.rlc.TaggedList((row_i,col_i))
-				x=list(c.rx[key])[0]
-				c.rx[key] = (1-x)/2
-		return r['as.dist'](c)
+		ro.globalenv['c']=c
+		return r('as.dist((1 - c)/2)')
 	
 	
 	def distro(self,fn=None):
@@ -1179,7 +1206,7 @@ class RpyD2():
 		grdevices.dev_off()
 		print ">> saved: "+fn
 
-	def mean_stdev(self,cols=[],rows=[]):
+	def flatten(self,cols=[],rows=[]):
 		if rows or cols:
 			x=self.sub(cols=cols,rows=rows)
 		else:
@@ -1187,8 +1214,13 @@ class RpyD2():
 		data=[]
 		for icol in range(self.ncol):
 			data.extend(self.col(icol))
-		
-		return mean_stdev(data)
+		return data
+
+	def median(self,cols=[],rows=[]):
+		return median(self.flatten(cols=cols,rows=rows))	
+
+	def mean_stdev(self,cols=[],rows=[]):
+		return mean_stdev(self.flatten(cols=cols,rows=rows))
 
 
 
@@ -1364,6 +1396,29 @@ TODO:
 
 
 """
+
+def signcorr(samplesize):
+	import numpy as np
+	return 1.96/np.sqrt(samplesize-3)
+
+
+def ndian(numericValues,n=2):
+	theValues = sorted(numericValues)
+	if len(theValues) % n == 1:
+		return theValues[(len(theValues)+1)/n-1]
+	else:
+		lower = theValues[len(theValues)/n-1]
+		upper = theValues[len(theValues)/n]
+		return (float(lower + upper)) / n
+
+def median(numericValues):
+	return ndian(numericValues,n=2)
+	
+def lowerq(numericValues):
+	return ndian(numericValues,n=4)
+
+
+
 
 def str_polyfunc(coefficients):
 	frmla=[]
