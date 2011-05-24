@@ -469,10 +469,19 @@ class RpyD2():
 					pp+=ggplot2.stat_smooth(col='blue',size=1,se=se)
 
 		if density:
-			pp+=ggplot2.geom_histogram(ggplot2.aes_string(x=x,y='..count..'))
+			if density=='h':
+				pp+=ggplot2.geom_histogram(ggplot2.aes_string(x=x,y='..count..'))
+			else:
+				if col:
+					pp+=ggplot2.geom_density(ggplot2.aes_string(x=x,y='..count..',fill=col,alpha=0.2))
+				else:
+					pp+=ggplot2.geom_density(ggplot2.aes_string(x=x,y='..count..'))
 
 		if line:
-			pp+=ggplot2.geom_line(position='jitter')
+			if jitter:
+				pp+=ggplot2.geom_line(position='jitter')
+			else:
+				pp+=ggplot2.geom_line()
 		
 		if bar:
 			pp+=ggplot2.geom_area(ggplot2.aes_string(x=x,y=y,fill=col))
@@ -770,10 +779,10 @@ class RpyD2():
 		self._groupv[gk]=RpyD2(ld)
 		return self._groupv[gk]
 	
-	def sub_where(self,rows={}):
+	def sub_where(self,rows={},removeCol=False):
 		r=self.sub(rows=self.rows_where(rows))
-		for k in rows:
-			r.removeCol(k)
+		if removeCol:
+			for k in rows: r.removeCol(k)
 		return r
 	
 	def polyfits(self,x,y,degs,addCol=True,fn=None,onlyBest=False):
@@ -934,13 +943,16 @@ class RpyD2():
 		print ">> saved: "+fn
 
 
-	def dist(self,z=False):
-		return r['dist'](self.q(z).df)
+	def dist(self,z=False,cor=False):
+		if not cor:
+			return r['dist'](self.q(z).df)
+		else:
+			return self.cordist()
 
 
-	def kclust(self,k=4,z=True,plot=True,fn=None,w=1100,h=800):
+	def kclust(self,k=4,rsplit=False,cor=False,z=True,plot=True,fn=None,w=1100,h=800):
 		""" Currently set to return self.pam(k) for robust k-means clustering."""
-		fit=self.pam(k=k,z=z)
+		fit=self.pam(k=k,z=z,cor=cor)
 		
 		if plot:
 			importr('cluster')
@@ -951,17 +963,34 @@ class RpyD2():
 			grdevices.dev_off()
 			print ">> saved: "+fn
 
+
+
+		if rsplit:
+			clusterDF=list(fit[2])
+			groups={}
+			for i in range(len(clusterDF)):
+				cnum=clusterDF[i]
+				ckey=self.cols[i]
+				if not cnum in groups:
+					groups[cnum]=[]
+				groups[cnum]+=[ckey]
+						
+			for cnum in groups:
+				groups[cnum]=self.sub(cols=groups[cnum])
+			return groups
+			
+		
 		return fit
 		
 		
 		
-	def pam(self,k=4,z=True):
+	def pam(self,k=4,z=True,cor=False):
 		"""API to R's pam function: 
 			http://stat.ethz.ch/R-manual/R-patched/library/cluster/html/pam.html
 		A more robust version of k-means clustering, 'around medoids.'
 		"""
 		importr('cluster')
-		return r['pam'](self.q(z=z).dist(),k)
+		return r['pam'](self.q(z=z).dist(cor=cor),k)
 
 
 	def kmeans(self,k=4):
@@ -1013,14 +1042,9 @@ class RpyD2():
 	
 
 	def hclust(self,cor=False,z=True,plot=True,fn=None,w=1100,h=900):
-		if cor:
-			dist=self.cordist()
-		else:
-			dist=self.dist(z=z)
-
-		if not fn:
-			fn='hclust.png'
-
+		dist=self.dist(z=z,cor=cor)
+		
+		if not fn: fn='hclust.png'
 		hclust=r['hclust'](dist)
 		grdevices.png(file=fn, width=w, height=h)
 		r['plot'](hclust)
