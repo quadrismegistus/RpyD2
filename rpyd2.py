@@ -3,6 +3,7 @@ RpyD2
 depends:
 	rpy2  <http://rpy.sourceforge.net/rpy2.html>
 """
+from __future__ import division
 from rpy2 import robjects as ro
 r = ro.r
 from rpy2.robjects.packages import importr
@@ -21,6 +22,71 @@ def load(fn):
 		setattr(r,k,v)
 	r.df=ro.DataFrame(df)
 	return r
+
+
+def signcorr(samplesize):
+	import numpy as np
+	return 1.96/np.sqrt(samplesize-3)
+
+
+def ndian(numericValues,n=2):
+	theValues = sorted(numericValues)
+	if len(theValues) % n == 1:
+		return theValues[int((len(theValues)+1)/n)-1]
+	else:
+		lower = theValues[int(len(theValues)/n)-1]
+		upper = theValues[int(len(theValues)/n)]
+		return (float(lower + upper)) / n
+
+def median(numericValues):
+	try:
+		import numpy as np
+		return np.median(numericValues)
+	except:
+		return ndian(numericValues,n=2)
+
+def lowerq(numericValues):
+	return ndian(numericValues,n=4)
+
+def upperq(numericValues):
+	return ndian(numericValues,n=(4/3))
+
+def upperthird(numericValues):
+	return ndian(numericValues,n=(3/2))
+
+
+def lowereighth(numericValues):
+	return ndian(numericValues,n=8)
+
+def lowerfifth(numericValues):
+	return ndian(numericValues,n=5)
+
+def lowertenth(numericValues):
+	return ndian(numericValues,n=10)
+
+def mean(l):
+	return mean_stdev(l)[0]
+
+
+def str_polyfunc(coefficients):
+	frmla=[]
+	import decimal
+	deg=len(coefficients)-1
+	for i in range(len(coefficients)):
+		term=str(decimal.Decimal(str(coefficients[i])))
+		power=deg-i
+		if power:
+			term+='*x^'+str(deg-i)
+		frmla+=[ term ]
+	frmla=' + '.join(frmla)
+	return frmla
+
+def make_polyfunc(coefficients):
+	l=[(coefficients[i],(len(coefficients)-1-i)) for i in range(len(coefficients))]
+	return lambda x: sum([t[0]*(x**t[1]) for t in l])
+
+
+
 	
 
 class RpyD2():
@@ -326,7 +392,6 @@ class RpyD2():
 			else:
 				if self.z:
 					v=zfy(v)
-				
 				dd[k]=ro.FloatVector(v)		
 		df=ro.DataFrame(dd)
 		self._set_DF(df)
@@ -342,14 +407,18 @@ class RpyD2():
 		self.cols=list(self.df.colnames)
 		self.rows=list(self.df.rownames)
 
-	def rankcols(self,byVariance=False,returnSums=False):
+	def rankcols(self,byVariance=False,returnSums=False,rankfunc=None):
 		ranks={}
 		for colname in self.cols:
 			col=self.col(colname)
 			if byVariance:
 				rankcol=sum([abs(x) for x in zfy(col)])
 			else:
-				rankcol=median(col)
+				if not rankfunc:
+					rankcol=sum(col)
+				else:
+					rankcol=rankfunc(col)
+					
 			ranks[colname]=rankcol
 		
 		keys=sorted(ranks,key=lambda item: -ranks[item])
@@ -959,7 +1028,7 @@ class RpyD2():
 		else:
 			return self.cordist()
 
-	def corclust(self,pr=None):
+	def corclust(self,fn=None,pr=None,plot=True,rankfunc=lowerfifth):
 		if not pr: pr=signcorr(len(self.rows))
 		print ">> PR:",pr
 		
@@ -969,14 +1038,14 @@ class RpyD2():
 			success=True
 			for r in rs.values():
 				#prnow=r.cormedian()
-				prnow=lowerq(r.cor(returnType='r').flatten())
-				print prnow,
+				prnow=rankfunc(r.cor(returnType='r').flatten())
+				print prnow, rankfunc.__name__
 				if prnow<pr:
 					success=False
 					print 'X...'
 					break
-				print
 			if success:
+				if plot: self.kclust(fn=fn,k=k,cor=True,rsplit=False,plot=True)
 				break
 		return rs
 			
@@ -987,8 +1056,8 @@ class RpyD2():
 		
 		if plot:
 			importr('cluster')
-			if not fn:
-				fn='kclust.'+str(k).zfill(2)+'.z'+str(z)+'.png'
+			if not fn: fn='kclust'
+			fn+='.'+str(k).zfill(2)+'.z'+str(z)+'.png'
 			grdevices.png(file=fn, width=w, height=h)
 			r['clusplot'](fit,color=True, shade=True, labels=2, lines=0, main=fn)
 			grdevices.dev_off()
@@ -1047,18 +1116,23 @@ class RpyD2():
 		return r('as.dist((1 - c)/2)')
 	
 	
-	def distro(self,fn=None):
-		cols,sums=self.rankcols(returnSums=True)
+	def distro(self,fn=None,rankfunc=None):
+		cols,sums=self.rankcols(returnSums=True,rankfunc=rankfunc)
 		lc=len(str(len(cols)))
 		
+		if not rankfunc:
+			sumk='sum'
+		else:
+			sumk=rankfunc.__name__
+		
 		dl={}
-		dl['sums']=sums
+		dl[sumk]=sums
 		dl['cols']=['r'+str(i).zfill(lc)+cols[i] for i in range(len(cols))]
 		
 		r=RpyD2(dl)
 		if not fn: fn='distro.png'
-		r.plot(fn=fn.replace('.png','.cols.png'),x='sums',y='cols',point=True,smooth=False)
-		r.plot(fn=fn.replace('.png','.density.png'),x='sums',density=True)
+		r.plot(fn=fn.replace('.png','.cols.png'),x=sumk,y='cols',point=True,smooth=False)
+		r.plot(fn=fn.replace('.png','.density.png'),x=sumk,density=True)
 		
 		return r
 	
@@ -1329,15 +1403,19 @@ def getCols(ld,allcols=False,rownamecol=None):
 
 
 def mean_stdev(x):
-	from math import sqrt
-	n, mean, std = len(x), 0, 0
-	for a in x:
-		mean = mean + a
-		mean = mean / float(n)
-	for a in x:
-		std = std + (a - mean)**2
-		std = sqrt(std / float(n-1))
-	return mean, std
+	try:
+		import numpy as np
+		return np.mean(x), np.std(x)
+	except:
+		from math import sqrt
+		n, mean, std = len(x), 0, 0
+		for a in x:
+			mean = mean + a
+			mean = mean / float(n)
+		for a in x:
+			std = std + (a - mean)**2
+			std = sqrt(std / float(n-1))
+		return mean, std
 
 
 
@@ -1396,43 +1474,3 @@ TODO:
 
 
 """
-
-def signcorr(samplesize):
-	import numpy as np
-	return 1.96/np.sqrt(samplesize-3)
-
-
-def ndian(numericValues,n=2):
-	theValues = sorted(numericValues)
-	if len(theValues) % n == 1:
-		return theValues[(len(theValues)+1)/n-1]
-	else:
-		lower = theValues[len(theValues)/n-1]
-		upper = theValues[len(theValues)/n]
-		return (float(lower + upper)) / n
-
-def median(numericValues):
-	return ndian(numericValues,n=2)
-	
-def lowerq(numericValues):
-	return ndian(numericValues,n=4)
-
-
-
-
-def str_polyfunc(coefficients):
-	frmla=[]
-	import decimal
-	deg=len(coefficients)-1
-	for i in range(len(coefficients)):
-		term=str(decimal.Decimal(str(coefficients[i])))
-		power=deg-i
-		if power:
-			term+='*x^'+str(deg-i)
-		frmla+=[ term ]
-	frmla=' + '.join(frmla)
-	return frmla
-
-def make_polyfunc(coefficients):
-	l=[(coefficients[i],(len(coefficients)-1-i)) for i in range(len(coefficients))]
-	return lambda x: sum([t[0]*(x**t[1]) for t in l])
