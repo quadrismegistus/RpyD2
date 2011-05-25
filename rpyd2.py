@@ -54,6 +54,8 @@ def upperq(numericValues):
 def upperthird(numericValues):
 	return ndian(numericValues,n=(3/2))
 
+def upperthirdfifth(numericValues):
+	return ndian(numericValues,n=(5/3))
 
 def lowereighth(numericValues):
 	return ndian(numericValues,n=8)
