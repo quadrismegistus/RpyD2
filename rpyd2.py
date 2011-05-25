@@ -459,7 +459,7 @@ class RpyD2():
 		return
 		
 
-	def plot(self, fn=None, x=None, y=None, col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14):
+	def plot(self, fn=None, x=None, y=None, col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14,position='jitter'):
 		
 		if fn==None:
 			fn='plot.'+self._get_fn(x,y)+'.png'
@@ -552,7 +552,7 @@ class RpyD2():
 			if jitter:
 				pp+=ggplot2.geom_line(position='jitter')
 			else:
-				pp+=ggplot2.geom_line()
+				pp+=ggplot2.geom_line(position=position)
 		
 		if bar:
 			pp+=ggplot2.geom_area(ggplot2.aes_string(x=x,y=y,fill=col))
@@ -837,7 +837,7 @@ class RpyD2():
 			else:
 				xv=row
 			
-			if xv.isdigit():
+			if type(xv)==type('') and xv.isdigit():
 				xv=float(xv)
 			
 			for yi in ys:
@@ -856,21 +856,21 @@ class RpyD2():
 			for k in rows: r.removeCol(k)
 		return r
 	
-	def polyfits(self,x,y,degs,addCol=True,fn=None,onlyBest=False):
+	def polyfits(self,x,y,degs,addCol=True,fn=None,plot=True,onlyBest=False):
 		ldn=[]
 		if fn==None:
 			fn='polyfit.'+self._get_fn(x,y)+'.png'
 		for i in degs:
-			fit=self.polyfit(x,y,i)
+			fit=self.polyfit(x,y,i,addCol=addCol)
 			dd={}
 			dd['deg']=i
 			dd['sum_residuals']=sum(fit['ryanresid'])
 			ldn.append(dd)
 
 		rn=RpyD2(ldn)
-		rn.plot('polyfit.'+fn.replace('.png','.residuals.png'), x='deg',y='sum_residuals',line=True,point=True,smooth=False)
+		if plot: rn.plot('polyfit.'+fn.replace('.png','.residuals.png'), x='deg',y='sum_residuals',line=True,point=True,smooth=False)
 		
-		if addCol:
+		if addCol:	# only works if column appended
 			if onlyBest:
 				res=rn.col('sum_residuals')
 				lres=None
@@ -889,8 +889,8 @@ class RpyD2():
 				rg=self.group('cnum',['polyfit_'+best.zfill(2),y])
 			else:
 				rg=self.group('cnum')
-			rg.plot('polyfit.'+fn, x='cnum', y='y', col='y_type',group='y_type',line=True,point=True,smooth=False)
-		
+			if plot: rg.plot('polyfit.'+fn, x='row', y='y', col='y_type',group='y_type',line=True,point=True,smooth=False)
+			return [ (c,self.col(c)) for c in self.cols if c.startswith('polyfit_'+best.zfill(2)) ]
 	
 	
 	def polyfit(self,x,y,deg=3,addCol=True,addDer=True):
@@ -907,7 +907,7 @@ class RpyD2():
 		f2=np.polyder(f)
 		if addCol:
 			self.addCol('polyfit_'+str(deg).zfill(2),[f(x) for x in xs])
-			#self.addCol('polyfit_'+str(deg).zfill(2)+'_1drv',[f2(x) for x in xs])
+			self.addCol('polyfit_'+str(deg).zfill(2)+'_1drv',[f2(x) for x in xs])
 		
 		fitd={}
 		fitd['coeff']=fit[0]
