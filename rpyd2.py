@@ -23,11 +23,87 @@ def load(fn):
 	r.df=ro.DataFrame(df)
 	return r
 
+def write(fn,data,toprint=False,join_line='\n',join_cell='\t'):
+	if type(data)==type([]):
+		o=""
+		for x in data:
+			if type(x)==type([]):
+				z=[]
+				for y in x:
+					if type(y)==type(u''):
+						y=y.encode('utf-8')
+					z+=[y]
+				x=z
+				line=join_cell.join(x)
+			else:
+				try:
+					line=str(x)
+				except UnicodeEncodeError:
+					line=x.encode('utf-8')
+			line=line.replace('\r','').replace('\n','')
+			o+=line+join_line
+	else:
+		o=str(data)
+	of = open(fn,'w')
+	of.write(o)
+	of.close()
+	if toprint:
+		print ">> saved: "+fn
 
 def signcorr(samplesize):
 	import numpy as np
 	return 1.96/np.sqrt(samplesize-3)
 
+# 
+# 
+# def mergeDL(dl1,dl2,rstyle=True):
+# 	for k in dl2:	
+# 		kk=k
+# 		if rstyle:
+# 			if kk[0].isdigit(): kk='X'+kk
+# 			kk=kk.replace("'",".")
+# 			kk=kk.replace("-",".")
+# 			kk=kk.replace(" ",".")
+# 			
+# 		try:
+# 			dl1[kk].extend(dl2[k])
+# 		except KeyError:
+# 			print(">> error merging DLs: '"+kk+"' not found in original DL")
+# 			continue
+# 	return dl1
+# 	
+
+def rkey(kk):
+	if kk[0].isdigit(): kk='X'+kk
+	kk=kk.replace("'",".")
+	kk=kk.replace("-",".")
+	kk=kk.replace(" ",".")
+	kk=kk.replace(",",".")
+	return kk
+
+def mergeDL(dl1,dl2,rstyle=True):
+	dl={}
+	for k in dl1:
+		dl[k]=[]
+		dl[k].extend(dl1[k])
+	
+	for k in dl2:	
+		kk=k
+		if rstyle:
+			kk=rkey(kk)
+		
+		try:
+			dl[kk].extend(dl2[k])
+		except KeyError:
+			print(">> error merging DLs: '"+kk+"' not found in original DL")
+			continue
+	return dl
+			
+def printDL(dl):
+	for k in dl:
+		print k, len(dl[k]), dl[k][0], "..."	
+	print
+	
 
 def ndian(numericValues,n=2):
 	theValues = sorted(numericValues)
@@ -68,6 +144,10 @@ def lowertenth(numericValues):
 
 def mean(l):
 	return mean_stdev(l)[0]
+
+def correlate(x,y):
+	from statlib.stats import pearsonr
+	return pearsonr(x,y)
 
 
 def str_polyfunc(coefficients):
@@ -136,6 +216,7 @@ class RpyD2():
 		self.onlyCat=False
 		self.rownames=[]
 		self.toprint=True
+		self.colkey={}
 		
 		## override defaults with
 		for k,v in kwargs.items():
@@ -190,6 +271,8 @@ class RpyD2():
 		except KeyError:
 			return
 	
+	
+	
 	def row(self,rowname):
 		"""Return row 'rowname', where rowname can be either a string name or an integer position (starting at 0)."""
 		try:
@@ -229,19 +312,23 @@ class RpyD2():
 		"""
 		
 		dl={}
+		
+		if rownamecol and type(rownamecol)!=type(''):
+			rownamecol='rownamecol'
+		
 		if not cols and not rows:
 			for i in range(self.ncol):
 				col=self.col(i)
 				colname=self.cols[i]
 				dl[colname]=col
 			if rownamecol:
-				dl['rownamecol']=self.df.rownames
+				dl[rownamecol]=list(self.df.rownames)
 			
 		elif cols and not rows:
 			for col in cols:
 				dl[col]=self.col(col)
 			if rownamecol:
-				dl['rownamecol']=self.df.rownames
+				dl[rownamecol]=list(self.df.rownames)
 			
 		elif cols and rows:
 			for col in cols:
@@ -252,12 +339,12 @@ class RpyD2():
 					dl[col].append(rowdat[colnum])
 			
 			if rownamecol:
-				dl['rownamecol']=[]
+				dl[rownamecol]=[]
 				for row in rows:
 					if type(row)==type(''):
-						dl['rownamecol'].append(row)
+						dl[rownamecol].append(row)
 					else:
-						dl['rownamecol'].append(self.rows[row])
+						dl[rownamecol].append(self.rows[row])
 				
 			
 		elif rows and not cols:
@@ -269,12 +356,12 @@ class RpyD2():
 					dl[col].append(rowdat[colnum])
 					
 			if rownamecol:
-				dl['rownamecol']=[]
+				dl[rownamecol]=[]
 				for row in rows:
 					if type(row)==type(''):
-						dl['rownamecol'].append(row)
+						dl[rownamecol].append(row)
 					else:
-						dl['rownamecol'].append(str(self.rows[row]))
+						dl[rownamecol].append(str(self.rows[row]))
 
 		return dl
 
@@ -459,22 +546,26 @@ class RpyD2():
 		return
 		
 
-	def plot(self, fn=None, x=None, y=None, col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14,position='jitter'):
+	def _kwd(self,kwd,**kwarg):
+		for k,v in kwarg.items():
+			if not k in kwd:
+				kwd[k]=v
+		return kwd
+
+	def plot(self, fn=None, x=None, y=None, **opt):
+		opt=self._kwd(opt,col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14, position='identity')
+
+		if opt['jitter']: opt['position']='jitter'
 		
-		if fn==None:
-			fn='plot.'+self._get_fn(x,y)+'.png'
 		df=self.df
-		#import math, datetime
-		
 
 		grdevices = importr('grDevices')
 
-		if not title:
-			title=fn.split("/")[-1]
+		
 
 		import rpy2.robjects.lib.ggplot2 as ggplot2
+
 		
-		grdevices.png(file=fn, width=w, height=h)
 		if not x:
 			if df.rownames[0].isdigit():
 				df.x=ro.FloatVector([float(x) for x in list(df.rownames)])
@@ -482,91 +573,92 @@ class RpyD2():
 				df.x=df.rownames
 			x='x'
 
+
 		gp = ggplot2.ggplot(df)
 		pp = gp
+
 		
+
 		if x and y:
-			if col and group:
-				pp+=ggplot2.aes_string(x=x, y=y,col=col,group=group)
-			elif col:
-				pp+=ggplot2.aes_string(x=x, y=y,col=col)
-			elif group:
-				pp+=ggplot2.aes_string(x=x, y=y,group=group)
+			if opt['col'] and opt['group']:
+				pp+=ggplot2.aes_string(x=x, y=y,col=opt['col'],group=opt['group'])
+			elif opt['col']:
+				pp+=ggplot2.aes_string(x=x, y=y,col=opt['col'])
+			elif opt['group']:
+				pp+=ggplot2.aes_string(x=x, y=y,group=opt['group'])
 			else:
 				pp+=ggplot2.aes_string(x=x, y=y)
 		else:
-			boxplot=False
-			point=False
-			boxplot2=False
-			smooth=False
-			line=False
-			bar=False	
+			if not opt['density']:
+				self._call_remaining('plot',x=x,y=y,**opt)
+				return
 
-		if boxplot:
-			if col:
-				pp+=ggplot2.geom_boxplot(ggplot2.aes_string(fill=col),color='blue')
+
+		if fn==None:
+			fn='plot.'+self._get_fn(x,y)+'.png'
+
+		if opt['boxplot']:
+			if opt['col']:
+				pp+=ggplot2.geom_boxplot(ggplot2.aes_string(fill=opt['col']),color='blue')
 			else:
 				pp+=ggplot2.geom_boxplot(color='blue')	
 
-		if point:
-			if jitter:
-				if col:
-					pp+=ggplot2.geom_point(ggplot2.aes_string(fill=col,col=col),size=size,position='jitter')
-				else:
-					pp+=ggplot2.geom_point(size=size,position='jitter')
+		if opt['point']:
+			if opt['col']:
+				pp+=ggplot2.geom_point(ggplot2.aes_string(fill=opt['col'],col=opt['col']),size=opt['size'],position=opt['position'])
 			else:
-				if col:
-					pp+=ggplot2.geom_point(ggplot2.aes_string(fill=col,col=col),size=size)
-				else:
-					pp+=ggplot2.geom_point(size=size)
+				pp+=ggplot2.geom_point(size=opt['size'],position=opt['position'])
 
 
-		if boxplot2:
-			if col:
-				pp+=ggplot2.geom_boxplot(ggplot2.aes_string(fill=col),color='blue',outlier_colour="NA")
+		if opt['boxplot2']:
+			if opt['col']:
+				pp+=ggplot2.geom_boxplot(ggplot2.aes_string(fill=opt['col']),color='blue',outlier_colour="NA")
 			else:
 				pp+=ggplot2.geom_boxplot(color='blue')
 
-		if smooth:
-			if smooth=='lm':
-				if col:
-					pp+=ggplot2.stat_smooth(ggplot2.aes_string(col=col),size=1,method='lm',se=se)
+		if opt['smooth']:
+			if opt['smooth']=='lm':
+				if opt['col']:
+					pp+=ggplot2.stat_smooth(ggplot2.aes_string(col=opt['col']),size=1,method='lm',se=opt['se'])
 				else:
-					pp+=ggplot2.stat_smooth(col='blue',size=1,method='lm',se=se)
+					pp+=ggplot2.stat_smooth(col='blue',size=1,method='lm',se=opt['se'])
 			else:
-				if col:
-					pp+=ggplot2.stat_smooth(ggplot2.aes_string(col=col),size=1,se=se)
+				if opt['col']:
+					pp+=ggplot2.stat_smooth(ggplot2.aes_string(col=opt['col']),size=1,se=opt['se'])
 				else:
-					pp+=ggplot2.stat_smooth(col='blue',size=1,se=se)
+					pp+=ggplot2.stat_smooth(col='blue',size=1,se=opt['se'])
 
-		if density:
-			if density=='h':
-				pp+=ggplot2.geom_histogram(ggplot2.aes_string(x=x,y='..count..'))
+		if opt['density']:
+			if opt['density']=='h':
+				if opt['col']:
+					pp+=ggplot2.geom_histogram(ggplot2.aes_string(x=x,y='..count..'))
+				else:
+					pp+=ggplot2.geom_histogram(ggplot2.aes_string(x=x,y='..scaled..',fill=opt['col'],col=opt['col'],alpha=0.2))
+				
 			else:
-				if col:
-					pp+=ggplot2.geom_density(ggplot2.aes_string(x=x,y='..count..',fill=col,alpha=0.2))
+				if opt['col']:
+					pp+=ggplot2.geom_density(ggplot2.aes_string(x=x,y='..scaled..',fill=opt['col'],col=opt['col'],alpha=0.2))
 				else:
 					pp+=ggplot2.geom_density(ggplot2.aes_string(x=x,y='..count..'))
 
-		if line:
-			if jitter:
-				pp+=ggplot2.geom_line(position='jitter')
-			else:
-				pp+=ggplot2.geom_line(position=position)
+		if opt['line']:
+			pp+=ggplot2.geom_line(position=opt['position'])
+
+		if opt['bar']:
+			pp+=ggplot2.geom_area(ggplot2.aes_string(x=x,y=y,fill=opt['col']))
 		
-		if bar:
-			pp+=ggplot2.geom_area(ggplot2.aes_string(x=x,y=y,fill=col))
-	
+		if not opt['title']:
+			opt['title']=fn.split("/")[-1]
 
 
-		pp+=ggplot2.opts(**{'title' : title, 'axis.text.x': ggplot2.theme_text(size=xlab_size), 'axis.text.y': ggplot2.theme_text(size=ylab_size,hjust=1)} )
+		pp+=ggplot2.opts(**{'title' : opt['title'], 'axis.text.x': ggplot2.theme_text(size=opt['xlab_size']), 'axis.text.y': ggplot2.theme_text(size=opt['ylab_size'],hjust=1)} )
 		#pp+=ggplot2.scale_colour_brewer(palette="Set1")
 		pp+=ggplot2.scale_colour_hue()
-		if flip:
+
+		if opt['flip']:
 			pp+=ggplot2.coord_flip()
 
-
-
+		grdevices.png(file=fn, width=opt['w'], height=opt['h'])
 		pp.plot()
 		grdevices.dev_off()
 		print ">> saved: "+fn
@@ -638,7 +730,7 @@ class RpyD2():
 		print ">> saved: "+fn
 		
 		
-	def _call_remaining(self,function_name,x=None,y=None):
+	def _call_remaining(self,function_name,x=None,y=None,**opt):
 		function=getattr(self,function_name)
 		if y and not x:
 			for col in self.cols:
@@ -652,7 +744,7 @@ class RpyD2():
 			for col in self.cols:
 				if col==x: continue
 				try:
-					function(x=x,y=col)
+					function(x=x,y=col,**opt)
 				except:
 					pass
 			return
@@ -999,7 +1091,6 @@ class RpyD2():
 
 	
 	
-	
 	## DISTANCE MEASURES
 
 	def corrgram(self,fn=None,w=1600,h=1600):
@@ -1030,11 +1121,130 @@ class RpyD2():
 		else:
 			return self.cordist()
 
-	def corclust(self,fn=None,pr=None,plot=True,rankfunc=lowerfifth):
+	def corcol(self,l,threshold_pp=0.05):
+		if len(l)!=len(self.rows):
+			print "!! error: row number mismatch. You gave me a list with",len(l),"items, while I am:\n\t",repr(self)
+			return
+		
+		cors=[]
+		for col in self.cols:
+			pr,pp=correlate(l,self.col(col))
+			if pp>threshold_pp: continue
+			cors.append( (col,pr) )
+		return cors
+	
+	# def corgraph(self,fn=None,pr=None):
+	# 		if not pr: pr=signcorr(len(self.rows))
+	# 		print ">> PR:",pr
+	# 		
+	# 		corr=self.cor(returnType='r')
+	# 		print corr
+	
+	def corgraph(self,fn='',threshold_pr=None,threshold_pp=0.01,plot=True,plotlim=20,txtlim=1000,justReturn=False):
+		#if not threshold_pr: threshold_pr=signcorr(len(self.rows))
+		
+		if fn: fn+='.'
+		fn+='corgraph.pdf'
+		
+		import networkx as nx
+		import pystats
+		G=nx.Graph()
+		for word1 in sorted(self.cols):
+			print word1,"..."
+			for word2 in sorted(self.cols):
+				if word2<=word1: continue
+				#print ">>",word1,word2,"...",
+				try:
+					pr,pp=pystats.correlate(self.col(word1),self.col(word2))
+				except:
+				#	print
+					continue
+				if pp>threshold_pp or pr<0.0:
+				#	print
+					continue
+				#print pr,pp,"!"
+				G.add_edge(word1,word2,weight=(pr,pp))
+		#pyd=nx.to_pydot(G)
+		
+		if justReturn: return G
+		
+		o=""
+		o+="\nSIZE: "+str(G.size())
+		o+="\nORDER: "+str(G.order())
+		o+="\nDENSITY: "+str(nx.density(G))
+		o+="\nCLUSTCOEF: "+str(nx.transitivity(G))
+
+		print o
+		
+		nx.write_edgelist(G,fn.replace('.pdf','.edgelist.txt'))
+		print ">> saved:",fn.replace('.pdf','.edgelist.txt')
+		
+		
+		o+="\n\n"
+		i=0
+		for k,v in sorted(nx.degree_centrality(G).items(),key=lambda item: -item[1]):
+			o+="\n"+str(k)+"\t"+str(v)
+			if k in self.colkey: o+="\t"+str(self.colkey[k])
+			i+=1
+			fnp='corgraph.plot1.'+k+'.'+str(v)+'.png'
+			if plot:
+				#if plotlim and i>plotlim: continue
+				self.group(ys=[k]).plot(fn=fnp,x='row',y='y',col='y_type',group='y_type',point=True,size=4,line=True,title=self.colkey[k])
+			
+
+		
+		o+="\n\n"
+		
+		i=0	
+		numedges=G.size()
+		for a,b in sorted(nx.edges(G),key=lambda item: G[item[0]][item[1]]['weight'][1]):
+			
+			ox=""
+			w=G[a][b]['weight']
+			if w[0]==1: continue
+			if w[1]==0: continue
+			i+=1
+			
+			if txtlim and i>txtlim: break
+			
+			
+			ox+="\n"+str(a)+"\t"+str(b)+"\t"+str(w)
+			if a in self.colkey and b in self.colkey:
+				ox+="\n"+str(self.colkey[a])
+				ox+="\n"+str(self.colkey[b])
+				ox+="\n"
+			o+=ox
+			
+			
+			if plot:
+				if plotlim and i>plotlim: continue
+				
+				fnp='corgraph.plot.'+ str(i).zfill(len(str(numedges)))+'.'+'.'.join(str(x) for x in [a,b])+'.png'
+				self.group(ys=[a,b]).plot(fn=fnp,x='row',y='y',col='y_type',group='y_type',point=True,size=4,line=True,title=ox)
+		
+		
+		
+		#pyd.write_pdf(fn)
+		#print ">> saved:",fn
+		
+		write(fn.replace('.pdf','.netstat.txt'),o,toprint=True)
+		return G
+		
+	
+
+	def corclust(self,fn=None,pr=None,plot=True,rankfunc=lowerfifth,kstart=2,kend=None,kstep=1,k=None):
 		if not pr: pr=signcorr(len(self.rows))
 		print ">> PR:",pr
 		
-		for k in range(2,len(self.cols)):
+		
+		if k:
+			kstart=k
+			kend=k+1
+			kstep=1
+		else:
+			if not kend: kend=len(self.cols)
+		
+		for k in range(kstart,kend,kstep):
 			print ">> trying:",k
 			rs=self.kclust(k=k,cor=True,rsplit=True,plot=False)
 			success=True
@@ -1045,7 +1255,7 @@ class RpyD2():
 				if prnow<pr:
 					success=False
 					print 'X...'
-					break
+					#break
 			if success:
 				if plot: self.kclust(fn=fn,k=k,cor=True,rsplit=False,plot=True)
 				break
@@ -1252,12 +1462,15 @@ class RpyD2():
 		#print ">> saved: "+fn
 
 
-	def cloud(self,fn=None,x='x',y='y',z='z',title=False,w=800,h=800):
+	def cloud(self,fn=None,x='x',y='y',z='z',group=None,title=False,w=800,h=800):
 		if not fn: fn='cloud.'+'.'.join([x,y,z])+'.png'
 		grdevices.png(file=fn, width=w, height=h)
 		r = ro.r
 		importr('lattice')
-		plot=r['cloud'](ro.Formula(z+'~'+y+'+'+x), self.df, scales = r('list(arrows = FALSE)'))
+		if groups:
+			plot=r['cloud'](ro.Formula(z+'~'+y+'+'+x), data = self.df, scales = r('list(arrows = FALSE)'),groups=groups)
+		else:
+			plot=r['cloud'](ro.Formula(z+'~'+y+'+'+x), data = self.df, scales = r('list(arrows = FALSE)'))
 		rprint(plot)
 		grdevices.dev_off()
 		print ">> saved: "+fn
