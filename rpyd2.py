@@ -599,7 +599,7 @@ class RpyD2():
 
 		if opt['boxplot']:
 			if opt['col']:
-				pp+=ggplot2.geom_boxplot(ggplot2.aes_string(fill=opt['col']),color='blue')
+				pp+=ggplot2.geom_boxplot(ggplot2.aes_string(fill=opt['col']),color='blue',position=opt['position'])
 			else:
 				pp+=ggplot2.geom_boxplot(color='blue')	
 
@@ -1140,7 +1140,7 @@ class RpyD2():
 	# 		corr=self.cor(returnType='r')
 	# 		print corr
 	
-	def corgraph(self,fn='',threshold_pr=None,threshold_pp=0.01,plot=True,plotlim=20,txtlim=1000,justReturn=False):
+	def corgraph(self,fn='',threshold_pr=None,threshold_pp=0.01,plot=True,plotlim=20,txtlim=1000,justReturn=False,storeDataInGraph=False):
 		#if not threshold_pr: threshold_pr=signcorr(len(self.rows))
 		
 		if fn: fn+='.'
@@ -1165,6 +1165,14 @@ class RpyD2():
 				#print pr,pp,"!"
 				G.add_edge(word1,word2,weight=(pr,pp))
 		#pyd=nx.to_pydot(G)
+		
+		if storeDataInGraph:
+			for node in G.nodes():
+				G.node[node]['data']=self.col(node)
+				try:
+					G.node[node]['key']=self.colkey[node]
+				except KeyError:
+					pass
 		
 		if justReturn: return G
 		
