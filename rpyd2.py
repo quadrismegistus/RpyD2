@@ -13,14 +13,16 @@ rprint = ro.globalenv.get("print")
 class InputNotRecognizedError(Exception):
 	pass
 
-def load(fn):
+def load(fn,toprint=True):
 	import pickle
+	if toprint: print ">> loading:",fn,"...",
 	d,df=pickle.load(open(fn))
 	r=RpyD2([])
 	r.__dict__=d
 	for k,v in d.items():
 		setattr(r,k,v)
 	r.df=ro.DataFrame(df)
+	print "done."
 	return r
 
 def write(fn,data,toprint=False,join_line='\n',join_cell='\t'):
@@ -557,7 +559,7 @@ class RpyD2():
 
 		if opt['jitter']: opt['position']='jitter'
 		
-		df=self.df
+		#df=self.df
 
 		grdevices = importr('grDevices')
 
@@ -565,16 +567,17 @@ class RpyD2():
 
 		import rpy2.robjects.lib.ggplot2 as ggplot2
 
+		#print hasattr(self.df,'x')
 		
 		if not x:
-			if df.rownames[0].isdigit():
-				df.x=ro.FloatVector([float(x) for x in list(df.rownames)])
+			if self.df.rownames[0].isdigit():
+				self.df.x=ro.FloatVector([float(xx) for xx in list(self.df.rownames)])
 			else:
-				df.x=df.rownames
+				self.df.x=self.df.rownames
 			x='x'
 
 
-		gp = ggplot2.ggplot(df)
+		gp = ggplot2.ggplot(self.df)
 		pp = gp
 
 		
@@ -590,12 +593,12 @@ class RpyD2():
 				pp+=ggplot2.aes_string(x=x, y=y)
 		else:
 			if not opt['density']:
-				self._call_remaining('plot',x=x,y=y,**opt)
+				self._call_remaining('plot',fn=fn,x=x,y=y,**opt)
 				return
-
-
-		if fn==None:
-			fn='plot.'+self._get_fn(x,y)+'.png'
+				
+		if type(fn)!=type(''): fn=''
+		if not fn.endswith('.png'):
+			fn+='plot.'+self._get_fn(x,y)+'.png'
 
 		if opt['boxplot']:
 			if opt['col']:
@@ -730,13 +733,13 @@ class RpyD2():
 		print ">> saved: "+fn
 		
 		
-	def _call_remaining(self,function_name,x=None,y=None,**opt):
+	def _call_remaining(self,function_name,x=None,y=None,fn=None,**opt):
 		function=getattr(self,function_name)
 		if y and not x:
 			for col in self.cols:
 				if col==y: continue
 				try:
-					function(x=col,y=y)
+					function(x=col,y=y,fn=fn)
 				except:
 					pass
 			return
@@ -744,7 +747,7 @@ class RpyD2():
 			for col in self.cols:
 				if col==x: continue
 				try:
-					function(x=x,y=col,**opt)
+					function(x=x,y=col,fn=fn,**opt)
 				except:
 					pass
 			return
@@ -885,11 +888,17 @@ class RpyD2():
 	def polyplot(self,terms):
 		pass
 	
+	def addRowCol(self,name='rowcol'):
+		self.addCol(name,self.rows)
+		
+	
 	def addCol(self,name,vals):
 		dl=self.toDL()
-		try:
+		#try:
+		if type(vals[0])!=type(''):
 			dl[name]=ro.FloatVector(vals)
-		except:
+		#except:
+		else:
 			dl[name]=ro.StrVector(vals)
 			if self.factor:
 				dl[name]=ro.FactorVector(dl[name])
@@ -1237,13 +1246,245 @@ class RpyD2():
 		
 		write(fn.replace('.pdf','.netstat.txt'),o,toprint=True)
 		return G
+	
+	def clustergram2(self,fn=None,w=800,h=600,kstart=2,kend=10):
+		ro.r('''
+			library(plyr)
+			ks.default <- function(rows) seq(2, max(3, rows %/% 4))
+
+			many_kmeans <- function(x, ks = ks.default(nrow(x)), ...) {
+			  ldply(seq_along(ks), function(i) {
+			    cl <- kmeans(x, centers = ks[i], ...)
+			    data.frame(obs = seq_len(nrow(x)), i = i, k = ks[i], cluster = cl$cluster)
+			  })
+			}
+
+			all_hclust <- function(x, ks = ks.default(nrow(x)), point.dist = "euclidean", cluster.dist = "ward") {
+			  d <- dist(x, method = point.dist)
+			  cl <- hclust(d, method = cluster.dist)
+
+			  ldply(seq_along(ks), function(i) {
+			    data.frame(
+			      obs = seq_len(nrow(x)), i = i, k = ks[i], 
+			      cluster = cutree(cl, ks[i])
+			    )
+			  })  
+			}
+
+			center <- function(x) x - mean(range(x))
+
+			#' @param clusters data frame giving cluster assignments as produced by 
+			#'   many_kmeans or all_hclust
+			#' @param y value to plot on the y-axis.  Should be length
+			#'   \code{max(clusters$obs)}
+			clustergram <- function(clusters, y, line.width = NULL) {
+			  clusters$y <- y[clusters$obs]
+			  clusters$center <- ave(clusters$y, clusters$i, clusters$cluster)  
+
+			  if (is.null(line.width)) {
+			    line.width <- 0.5 * diff(range(clusters$center, na.rm = TRUE)) / 
+			      length(unique(clusters$obs))
+			  }
+			  clusters$line.width <- line.width
+
+			  # Adjust center positions so that they don't overlap  
+			  clusters <- clusters[with(clusters, order(i, center, y, obs)), ]  
+			  clusters <- ddply(clusters, c("i", "cluster"), transform, 
+			    adj = center + (line.width * center(seq_along(y)))
+			  )
+
+			  structure(clusters, 
+			    class = c("clustergram", class(clusters)),
+			    line.width = line.width)
+			}
+
+			plot.clustergram <- function(x) {
+			  i_pos <- !duplicated(x$i)
+
+			  means <- ddply(x, c("cluster", "i"), summarise, 
+			    min = min(adj), max = max(adj))
+
+			  ggplot(x, aes(i)) +
+			    geom_ribbon(aes(y = adj, group = obs, fill = y, ymin = adj - line.width/2, ymax = adj + line.width/2, colour = y)) + 
+			    geom_errorbar(aes(ymin = min, ymax = max), data = means, width = 0.1) + 
+			    scale_x_continuous("cluster", breaks = x$i[i_pos], labels = x$k[i_pos]) +
+			    labs(y = "Cluster average", colour = "Obs\nvalue", fill = "Obs\nvalue")
+
+			}
+		''')
+		dm=ro.r['as.matrix'](self.q().df)
+		ro.globalenv['dm']=dm
+		
+		if not fn: fn='clustergram.png'
+		grdevices.png(file=fn, width=w, height=h)
+		
+		ro.r('''
+			library(ggplot2)
+			k_def <- many_kmeans(dm)
+			k_10 <- many_kmeans(dm, '''+str(kstart)+''':'''+str(kend)+''')
+			k_rep <- many_kmeans(dm, rep(4, 5))
+			h_def <- all_hclust(dm)
+			h_10 <- all_hclust(dm, 2:10)
+			h_5 <- all_hclust(dm, seq(2, 20, by = 4))
+
+			pr <- princomp(dm)
+			pr1 <- predict(pr)[, 1]
+			pr2 <- predict(pr)[, 2]
+
+			plot(clustergram(k_def, pr1))
+			plot(clustergram(k_rep, pr1))
+			plot(clustergram(k_rep, pr2))
+		
+			pr <- princomp(dm)
+			pr1 <- predict(pr)[, 1]
+			pr2 <- predict(pr)[, 2]
+			plot(clustergram(k_def, pr1))
+		''')
+		"""
+		plot(clustergram(k_rep, pr1))
+		plot(clustergram(k_rep, pr2))
+		
+		"""
+		grdevices.dev_off()
+		print ">> saved:",fn
 		
 	
+	
+	
+	def clustergram(self,fn=None,w=800,h=600,kstart=2,kend=10):
+		ro.r('''
+			clustergram.kmeans <- function(Data, k, ...)
+			{
+				# this is the type of function that the clustergram
+				# 	function takes for the clustering.
+				# 	using similar structure will allow implementation of different clustering algorithms
+
+				#	It returns a list with two elements:
+				#	cluster = a vector of length of n (the number of subjects/items)
+				#				indicating to which cluster each item belongs.
+				#	centers = a k dimensional vector.  Each element is 1 number that represent that cluster
+				#				In our case, we are using the weighted mean of the cluster dimensions by 
+				#				Using the first component (loading) of the PCA of the Data.
+
+				cl <- kmeans(Data, k,...)
+
+				cluster <- cl$cluster
+				centers <- cl$centers %*% princomp(Data)$loadings[,1]	# 1 number per center
+															# here we are using the weighted mean for each
+
+				return(list(
+							cluster = cluster,
+							centers = centers
+						))
+			}		
+
+			clustergram.plot.matlines <- function(X,Y, k.range, 
+														x.range, y.range , COL, 
+														add.center.points , centers.points)
+				{
+					plot(0,0, col = "white", xlim = x.range, ylim = y.range,
+						axes = F,
+						xlab = "Number of clusters (k)", ylab = "PCA weighted Mean of the clusters", main = "Clustergram of the PCA-weighted Mean of the clusters k-mean clusters vs number of clusters (k)")
+					axis(side =1, at = k.range)
+					axis(side =2)
+					abline(v = k.range, col = "grey")
+
+					matlines(t(X), t(Y), pch = 19, col = COL, lty = 1, lwd = 1.5)
+
+					if(add.center.points)
+					{
+						require(plyr)
+
+						xx <- ldply(centers.points, rbind)
+						points(xx$y~xx$x, pch = 19, col = "red", cex = 1.3)
+
+						# add points	
+						# temp <- l_ply(centers.points, function(xx) {
+												# with(xx,points(y~x, pch = 19, col = "red", cex = 1.3))
+												# points(xx$y~xx$x, pch = 19, col = "red", cex = 1.3)
+												# return(1)
+												# })
+									# We assign the lapply to a variable (temp) only to suppress the lapply "NULL" output
+					}	
+				}
+
+
+
+			clustergram <- function(Data, k.range = '''+str(kstart)+''':'''+str(kend)+''', 
+										clustering.function = clustergram.kmeans,
+										clustergram.plot = clustergram.plot.matlines, 
+										line.width = .004, add.center.points = T)
+			{
+				# Data - should be a scales matrix.  Where each column belongs to a different dimension of the observations
+				# k.range - is a vector with the number of clusters to plot the clustergram for
+				# clustering.function - this is not really used, but offers a bases to later extend the function to other algorithms 
+				#			Although that would  more work on the code
+				# line.width - is the amount to lift each line in the plot so they won't superimpose eachother
+				# add.center.points - just assures that we want to plot points of the cluster means
+
+				n <- dim(Data)[1]
+
+				PCA.1 <- Data %*% princomp(Data)$loadings[,1]	# first principal component of our data
+
+				if(require(colorspace)) {
+						COL <- heat_hcl(n)[order(PCA.1)]	# line colors
+					} else {
+						COL <- rainbow(n)[order(PCA.1)]	# line colors
+						warning('Please consider installing the package "colorspace" for prittier colors')
+					}
+
+				line.width <- rep(line.width, n)
+
+				Y <- NULL	# Y matrix
+				X <- NULL	# X matrix
+
+				centers.points <- list()
+
+				for(k in k.range)
+				{
+					k.clusters <- clustering.function(Data, k)
+
+					clusters.vec <- k.clusters$cluster
+						# the.centers <- apply(cl$centers,1, mean)
+					the.centers <- k.clusters$centers 
+
+					noise <- unlist(tapply(line.width, clusters.vec, cumsum))[order(seq_along(clusters.vec)[order(clusters.vec)])]	
+					# noise <- noise - mean(range(noise))
+					y <- the.centers[clusters.vec] + noise
+					Y <- cbind(Y, y)
+					x <- rep(k, length(y))
+					X <- cbind(X, x)
+
+					centers.points[[k]] <- data.frame(y = the.centers , x = rep(k , k))	
+				#	points(the.centers ~ rep(k , k), pch = 19, col = "red", cex = 1.5)
+				}
+
+
+				x.range <- range(k.range)
+				y.range <- range(PCA.1)
+
+				clustergram.plot(X,Y, k.range, 
+														x.range, y.range , COL, 
+														add.center.points , centers.points)
+
+
+			}
+			''')
+		clustergram=ro.r['clustergram']
+		if not fn: fn='clustergram.png'
+		grdevices.png(file=fn, width=w, height=h)
+		clustergram(r['as.matrix'](self.q().df))
+		grdevices.dev_off()
+		print ">> saved:",fn
+		
 
 	def corclust(self,fn=None,pr=None,plot=True,rankfunc=lowerfifth,kstart=2,kend=None,kstep=1,k=None):
 		if not pr: pr=signcorr(len(self.rows))
 		print ">> PR:",pr
 		
+		
+		if k: return self.kclust(k=k,cor=True,rsplit=True,plot=False)
+			
 		
 		if k:
 			kstart=k
@@ -1259,11 +1500,13 @@ class RpyD2():
 			for r in rs.values():
 				#prnow=r.cormedian()
 				prnow=rankfunc(r.cor(returnType='r').flatten())
-				print prnow, rankfunc.__name__
+				print prnow, rankfunc.__name__,
 				if prnow<pr:
 					success=False
-					print 'X...'
+					print 'X!'
 					#break
+				else:
+					print '...'
 			if success:
 				if plot: self.kclust(fn=fn,k=k,cor=True,rsplit=False,plot=True)
 				break
