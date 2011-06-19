@@ -543,7 +543,7 @@ class RpyD2():
 			#sub=self.sub_where(rows={'y_type':y[a:b]})
 			
 			abk=str(a).zfill(lc)+'-'+str(b).zfill(lc)
-			sub.plot(fn='plots.'+abk+'.'+self._get_fn(x,"+".join(y[a:b]))+'.png',x='row',y='y',col='y_type',group='y_type',smooth=False,line=True)
+			sub.plot(fn='plots.'+abk+'.'+self._get_fn(x,"+".join(y[a:b])) +'.png', x='row',y='y',col='y_type', group='y_type', smooth=False, line=True)
 			a=b
 		return
 		
@@ -555,7 +555,7 @@ class RpyD2():
 		return kwd
 
 	def plot(self, fn=None, x=None, y=None, **opt):
-		opt=self._kwd(opt,col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14, position='identity')
+		opt=self._kwd(opt,col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14, position='identity', xlab_angle=0, logX=False, logY=False, area=False)
 
 		if opt['jitter']: opt['position']='jitter'
 		
@@ -647,14 +647,26 @@ class RpyD2():
 		if opt['line']:
 			pp+=ggplot2.geom_line(position=opt['position'])
 
-		if opt['bar']:
+		if opt['area']:
 			pp+=ggplot2.geom_area(ggplot2.aes_string(x=x,y=y,fill=opt['col']))
+		
+		if opt['bar']:
+			if opt['col']:
+				pp+=ggplot2.geom_bar(ggplot2.aes_string(x=x,y=y,fill=opt['col']))
+			else:
+				pp+=ggplot2.geom_bar(ggplot2.aes_string(x=x,y=y))
+		
+		if opt['logX']:
+			pp+=ggplot2.scale_x_log10()
+		if opt['logY']:
+			pp+=ggplot2.scale_y_log10()
+	
 		
 		if not opt['title']:
 			opt['title']=fn.split("/")[-1]
 
 
-		pp+=ggplot2.opts(**{'title' : opt['title'], 'axis.text.x': ggplot2.theme_text(size=opt['xlab_size']), 'axis.text.y': ggplot2.theme_text(size=opt['ylab_size'],hjust=1)} )
+		pp+=ggplot2.opts(**{'title' : opt['title'], 'axis.text.x': ggplot2.theme_text(size=opt['xlab_size'],angle=opt['xlab_angle']), 'axis.text.y': ggplot2.theme_text(size=opt['ylab_size'],hjust=1)} )
 		#pp+=ggplot2.scale_colour_brewer(palette="Set1")
 		pp+=ggplot2.scale_colour_hue()
 
