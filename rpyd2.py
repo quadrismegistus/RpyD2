@@ -272,9 +272,7 @@ class RpyD2():
 				return list(c)
 		except KeyError:
 			return
-	
-	
-	
+
 	def row(self,rowname):
 		"""Return row 'rowname', where rowname can be either a string name or an integer position (starting at 0)."""
 		try:
@@ -307,14 +305,11 @@ class RpyD2():
 		{'col0':[row0val,row1val,...],
 		'col1':[row1val,row2val,...],
 		...}
-		
 		If rows is a non-empty list, return only these rows.
 		If cols is a non-empty list, return only these cols.
 		If both are non-empty, return only these rows and only these cols.
 		"""
-		
 		dl={}
-		
 		if rownamecol and type(rownamecol)!=type(''):
 			rownamecol='rownamecol'
 		
@@ -325,13 +320,13 @@ class RpyD2():
 				dl[colname]=col
 			if rownamecol:
 				dl[rownamecol]=list(self.df.rownames)
-			
+		
 		elif cols and not rows:
 			for col in cols:
 				dl[col]=self.col(col)
 			if rownamecol:
 				dl[rownamecol]=list(self.df.rownames)
-			
+		
 		elif cols and rows:
 			for col in cols:
 				dl[col]=[]
@@ -339,7 +334,6 @@ class RpyD2():
 				for row in rows:
 					rowdat=self.row(row)
 					dl[col].append(rowdat[colnum])
-			
 			if rownamecol:
 				dl[rownamecol]=[]
 				for row in rows:
@@ -347,16 +341,14 @@ class RpyD2():
 						dl[rownamecol].append(row)
 					else:
 						dl[rownamecol].append(self.rows[row])
-				
-			
+		
 		elif rows and not cols:
 			for col in self.cols:
 				dl[col]=[]
 				colnum=self.cols.index(col)
 				for row in rows:
 					rowdat=self.row(row)
-					dl[col].append(rowdat[colnum])
-					
+					dl[col].append(rowdat[colnum])		
 			if rownamecol:
 				dl[rownamecol]=[]
 				for row in rows:
@@ -364,7 +356,6 @@ class RpyD2():
 						dl[rownamecol].append(row)
 					else:
 						dl[rownamecol].append(str(self.rows[row]))
-
 		return dl
 
 	def save(self,fn=None):
@@ -464,7 +455,8 @@ class RpyD2():
 					try:
 						value=x[".".join(k.split(".")[1:])]
 					except:
-						value=zero
+						value=self.zero
+				
 				dd[k].append(value)
 		
 		self._boot_DL(dd)
@@ -474,16 +466,31 @@ class RpyD2():
 
 	def _boot_DL(self,dl,rownames=None):
 		dd={}
+		import datetime
 		for k,v in dl.items():
+			if type(k)==type(unicode()):
+				k=str(k.encode('utf-8','replace'))
+			
+			#print [type(vv) for vv in v]
 			if type(v[0])==type(''):
 				if self.onlyQuant: continue
 				dd[k]=ro.StrVector(v)
 				if self.factor:
 					dd[k]=ro.FactorVector(dd[k])
+			elif isinstance(v[0],datetime.datetime):
+				import time
+				dd[k]=ro.vectors.POSIXlt( [ time.struct_time([vv.year,vv.month,vv.day,0,0,0,0,0,0]) for vv in v]  )
 			else:
 				if self.z:
 					v=zfy(v)
-				dd[k]=ro.FloatVector(v)		
+				
+				try:
+					if not '.' in str(v[0]):
+						dd[k]=ro.IntVector(v)
+					else:
+						dd[k]=ro.FloatVector(v)
+				except:
+					continue
 		df=ro.DataFrame(dd)
 		self._set_DF(df)
 		
@@ -1774,8 +1781,30 @@ class RpyD2():
 	def mean_stdev(self,cols=[],rows=[]):
 		return mean_stdev(self.flatten(cols=cols,rows=rows))
 
-
-
+	def str_flot(self,x,y=[]):
+		"""
+		{% for word in wordtfs %}
+			"{{ word }}": {
+			label: "{{ word}}",
+			data: [ {% for year,value in wordtfs[word].items() %} [{{ year }}, {{ value }}], {% endfor %} ]
+		},
+		{% endfor %}
+		"""
+		
+		o=[]
+		index=self.col(x)
+		
+		for col in self.rankcols():
+			if col==x: continue
+			if y and (not col in y): continue
+			datstr=[(int(index[i]), cx) for i,cx in enumerate(self.col(col))]
+			o+=['''
+			"'''+col+'''": {
+				label: "'''+col+'''",
+				data: ['''+', '.join([ '['+str(dx[0])+', '+str(dx[1])+']' for dx in datstr])+''']
+			}''']
+		return ', \n'.join(o)
+	
 
 
 
