@@ -260,6 +260,8 @@ class RpyD2():
 	def col(self,colname):
 		"""Return column 'colname', where colname can be either a string name or an integer position (starting at 0)."""
 		try:
+			if type(colname)==type(unicode()): colname=colname.encode('utf-8')
+			
 			if type(colname)==type(''):
 				colnum=self.cols.index(colname)
 			else:
@@ -366,6 +368,19 @@ class RpyD2():
 		pickle.dump((self.__dict__,self.df),open(fn,'wb'))
 		print ">> saved:",fn
 	
+	def get(self,col=None,row=None):
+		if col and row:
+			return self.col(col)[self.rows.index(row)]
+			
+		elif col and not row:
+			return self.col(col)
+			
+		elif row and not col:
+			return self.row(row)
+			
+		elif not col and not row:
+			return self
+		
 	def sub(self,cols=[],rows=[]):
 		"""Return an RpyD2 from self, with only those rows and/or columns as specified."""
 		
@@ -472,8 +487,10 @@ class RpyD2():
 				k=str(k.encode('utf-8','replace'))
 			
 			#print [type(vv) for vv in v]
-			if type(v[0])==type(''):
+			#if type(v[0])==type(''):
+			if isinstance(v[0],basestring):
 				if self.onlyQuant: continue
+				if type(v[0])==type(unicode()): v = [vx.encode('utf-8','replace') for vx in v]
 				dd[k]=ro.StrVector(v)
 				if self.factor:
 					dd[k]=ro.FactorVector(dd[k])
@@ -491,6 +508,7 @@ class RpyD2():
 						dd[k]=ro.FloatVector(v)
 				except:
 					continue
+		
 		df=ro.DataFrame(dd)
 		self._set_DF(df)
 		
@@ -562,7 +580,7 @@ class RpyD2():
 		return kwd
 
 	def plot(self, fn=None, x=None, y=None, **opt):
-		opt=self._kwd(opt,col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14, position='identity', xlab_angle=0, logX=False, logY=False, area=False)
+		opt=self._kwd(opt,col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14, position='identity', xlab_angle=0, logX=False, logY=False, area=False, text=False, text_size=3, text_angle=45, pdf=False)
 
 		if opt['jitter']: opt['position']='jitter'
 		
@@ -582,12 +600,12 @@ class RpyD2():
 			else:
 				self.df.x=self.df.rownames
 			x='x'
-
+		
+		#self.df.y = self.df[self.df.colnames.index(y)]
+		#print self.df.y
 
 		gp = ggplot2.ggplot(self.df)
 		pp = gp
-
-		
 
 		if x and y:
 			if opt['col'] and opt['group']:
@@ -606,6 +624,13 @@ class RpyD2():
 		if type(fn)!=type(''): fn=''
 		if not fn.endswith('.png'):
 			fn+='plot.'+self._get_fn(x,y)+'.png'
+
+		if opt['text']:
+			if opt['col']:
+				pp+=ggplot2.geom_text(ggplot2.aes_string(label=opt['text'],colour=opt['col']),angle=opt['text_angle'],size=opt['text_size'])
+			else:
+				pp+=ggplot2.geom_text(ggplot2.aes_string(label=opt['text']),angle=opt['text_angle'],size=opt['text_size'])
+
 
 		if opt['boxplot']:
 			if opt['col']:
@@ -655,19 +680,26 @@ class RpyD2():
 			pp+=ggplot2.geom_line(position=opt['position'])
 
 		if opt['area']:
-			pp+=ggplot2.geom_area(ggplot2.aes_string(x=x,y=y,fill=opt['col']))
+			pp+=ggplot2.geom_area(ggplot2.aes_string(x=x,y=y,fill=opt['col'],col=opt['col']))
 		
 		if opt['bar']:
-			if opt['col']:
-				pp+=ggplot2.geom_bar(ggplot2.aes_string(x=x,y=y,fill=opt['col']))
+			if y:
+				if opt['col']:
+					pp+=ggplot2.geom_bar(ggplot2.aes_string(x=x,y=y,fill=opt['col']),position='dodge',stat='identity')
+				else:
+					pp+=ggplot2.geom_bar(ggplot2.aes_string(x=x,y=y),position='dodge',stat='identity')
 			else:
-				pp+=ggplot2.geom_bar(ggplot2.aes_string(x=x,y=y))
+				if opt['col']:
+					pp+=ggplot2.geom_bar(ggplot2.aes_string(x=x,fill=opt['col']),position='dodge')
+				else:
+					pp+=ggplot2.geom_bar(ggplot2.aes_string(x=x),position='dodge')
 		
 		if opt['logX']:
 			pp+=ggplot2.scale_x_log10()
 		if opt['logY']:
 			pp+=ggplot2.scale_y_log10()
-	
+
+		
 		
 		if not opt['title']:
 			opt['title']=fn.split("/")[-1]
@@ -680,7 +712,12 @@ class RpyD2():
 		if opt['flip']:
 			pp+=ggplot2.coord_flip()
 
-		grdevices.png(file=fn, width=opt['w'], height=opt['h'])
+		if opt['pdf']:
+			fn=fn.replace('.png','.pdf')
+			grdevices.pdf(file=fn, width=opt['w'], height=opt['h'])
+		else:
+			grdevices.png(file=fn, width=opt['w'], height=opt['h'])
+			
 		pp.plot()
 		grdevices.dev_off()
 		print ">> saved: "+fn
@@ -931,7 +968,7 @@ class RpyD2():
 		self.rownames=self.rows
 		self._boot_DL(dl,rownames=True)
 		
-	def group(self,x=None,ys=[],yname='y',ytype='y_type'):
+	def group(self,x=None,ys=[],yname='y',ytype='y_type',otherattrs=[]):
 		ld=[]
 		if not ys:
 			if x:
@@ -965,6 +1002,11 @@ class RpyD2():
 				d[xk]=xv
 				d[yname]=self.row(row)[yi]
 				d[ytype]=self.cols[yi]
+				for oa in otherattrs:
+					try:
+						d[oa]=self.row(row)[self.cols.index(oa)]
+					except:
+						pass
 				ld.append(d)
 
 		self._groupv[gk]=RpyD2(ld)
@@ -1065,7 +1107,7 @@ class RpyD2():
 		return rowsIncl
 
 
-	def lm(self,formula,toprint=True):
+	def lm(self,formula,toprint=False):
 		frmla=self._get_frmla(formula)
 		fit=r['lm'](frmla,data=self.df)
 
@@ -1143,12 +1185,19 @@ class RpyD2():
 		#print c.median()
 		return c.median()
 
-	def dist(self,z=False,cor=False):
+	def dist(self,z=False,cor=False,returnType=None):
 		if not cor:
-			return r['dist'](self.q(z).df)
+			x=r['dist'](self.q(z).df)
 		else:
-			return self.cordist()
-
+			x=self.cordist()
+		
+		if returnType is None:
+			return x
+		elif returnType.startswith('d'):
+			return r['as.data.frame'](r['as.matrix'](x))
+		elif returnType.startswith('r'):
+			return RpyD2(r['as.data.frame'](r['as.matrix'](x)))
+			
 	def corcol(self,l,threshold_pp=0.05):
 		if len(l)!=len(self.rows):
 			print "!! error: row number mismatch. You gave me a list with",len(l),"items, while I am:\n\t",repr(self)
@@ -1552,13 +1601,19 @@ class RpyD2():
 			groups={}
 			for i in range(len(clusterDF)):
 				cnum=clusterDF[i]
-				ckey=self.cols[i]
+				if cor:
+					ckey=self.cols[i]
+				else:
+					ckey=self.rows[i]
 				if not cnum in groups:
 					groups[cnum]=[]
 				groups[cnum]+=[ckey]
 						
 			for cnum in groups:
-				groups[cnum]=self.sub(cols=groups[cnum])
+				if cor:
+					groups[cnum]=self.sub(cols=groups[cnum])
+				else:
+					groups[cnum]=self.sub(rows=groups[cnum])
 			return groups
 			
 		
@@ -1810,7 +1865,7 @@ class RpyD2():
 
 
 
-def trimCols(ld,cols,maxcols,rank=True,byVariance=True,byFrequency=False,printStats=True):
+def trimCols(ld,cols,maxcols,rank=True,byVariance=True,byFrequency=False,printStats=True,saveStats=True):
 	# if self.origin!='ld':
 	# 	raise InputNotRecognizedError("Cannot recognize input of type "+type(self.input))
 	# ld=self.input
@@ -1845,14 +1900,18 @@ def trimCols(ld,cols,maxcols,rank=True,byVariance=True,byFrequency=False,printSt
 	sumvariances_df=sum(keysums.values())
 	sumvariances=0.0
 
+	keystats=[]
 	for key,score in sorted(keysums.items(),key=itemgetter(1),reverse=True):
-		print key,"\t",score
 		i+=1
-		if i>maxcols:
-			break
-		sumvariances+=score
-		allowedkeys.append(key)
-	#print allowedkeys
+		l=str(key)+"\t"+str(score)+"\t"+str(score/sumvariances_df)
+		if i<maxcols:
+			sumvariances+=score
+			allowedkeys.append(key)
+			l='*'+l
+			if printStats: print l
+						
+		if saveStats: keystats+=[l]
+
 
 	cols=[]
 	for i in range(len(allowedkeys)):
@@ -1867,13 +1926,21 @@ def trimCols(ld,cols,maxcols,rank=True,byVariance=True,byFrequency=False,printSt
 	else:
 		Zvariances = "TermFrequencies"
 
+	if printStats or saveStats:
+		keystats.insert(0,'feature\t'+Zvariances+'\tpercentof_totalVariance')
+		stats=""
+		stats+=">> sum of "+Zvariances+" in dataset:\t"+str(sumvariances_df)
+		stats+= "\n>> sum of "+Zvariances+" loaded:\t"+str(sumvariances)
+		stats+= "\n>> (ratio) sum of loaded "+Zvariances+" / sum of possible:\t"+str(sumvariances/sumvariances_df)
+		stats+= "\n>> # features loaded:\t"+str(len(cols))
+		stats+= "\n>> (ratio) sum of loaded "+Zvariances+" / # of features loaded:\t"+str(sumvariances/len(cols))
+	
 	if printStats:
-		print ">> sum of "+Zvariances+" in dataset:", sumvariances_df
-		print ">> sum of "+Zvariances+" loaded:", sumvariances
-		print ">> (ratio) sum of loaded "+Zvariances+" / sum of possible:", sumvariances/sumvariances_df
-		print ">> # features loaded:", len(cols)
-		print ">> (ratio) sum of loaded "+Zvariances+" / # of features loaded:", sumvariances/len(cols)
+		print stats
 		print
+	if saveStats:
+		write('feature-variances.txt',stats+'\n\n'+'\n'.join(keystats),toprint=True)
+	
 	#print cols
 	return cols
 
@@ -1935,6 +2002,7 @@ def r_plot(fn,obj,w=800,h=800,xlab='',ylab='',main=''):
 	grdevices.dev_off()
 	print ">> saved: "+fn
 
+	
 		
 
 def zfy(tfdict,limit=None):
