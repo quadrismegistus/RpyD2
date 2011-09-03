@@ -203,6 +203,8 @@ class RpyD2():
           self.onlyCat=False              # if True, only build categorical (string) columns
 
 		  self.toprint=True				  # if True, print R objects using R's summary() before returning them
+		  self.colkey={}
+		  self.rowcols=[]	# these will be kept even if allcols is set to a number, trimming columns
 		"""
 				
 		## set defaults
@@ -219,6 +221,7 @@ class RpyD2():
 		self.rownames=[]
 		self.toprint=True
 		self.colkey={}
+		self.rowcols=[]
 		
 		## override defaults with
 		for k,v in kwargs.items():
@@ -453,7 +456,7 @@ class RpyD2():
 		if not self.cols:
 			self.cols=getCols(ld,self.allcols,self.rownamecol)
 			if type(self.allcols)==type(2):
-				self.cols=trimCols(ld,self.cols,self.allcols,byVariance=self.trimbyVariance)
+				self.cols=trimCols(ld,self.cols,self.allcols,byVariance=self.trimbyVariance,rowcols=self.rowcols)
 		
 		for i in range(len(self.cols)):
 			k=self.cols[i]
@@ -1865,83 +1868,42 @@ class RpyD2():
 
 
 
-def trimCols(ld,cols,maxcols,rank=True,byVariance=True,byFrequency=False,printStats=True,saveStats=True):
-	# if self.origin!='ld':
-	# 	raise InputNotRecognizedError("Cannot recognize input of type "+type(self.input))
-	# ld=self.input
-
-
-	keysums={}
-	for col in cols:
-		keysums[col]=[]
-
-	for x in ld:
-		for k in x:
-			value=x[k]
-			if type(value)==type(float()) or type(value)==type(1):
-				try:
-					keysums[k]+=[value]
-				except KeyError:
-					continue
-	from operator import itemgetter
-	i=0
-	allowedkeys=[]
-
-	for k in keysums:
-		if len(keysums[k])<=1:
-			keysums[k]=0
-			continue
+def trimCols(ld,cols,maxcols,rank=True,byVariance=True,byFrequency=False,printStats=True,rowcols=[]):
+	def rank(l):
+		if len(l)<2: return 0
 		if byVariance or not byFrequency:
-			keysums[k]=sum([abs(x) for x in zfy(keysums[k])])
+			return sum([abs(x) for x in zfy(l)])
 		else:
-			keysums[k]=sum(keysums[k])
+			return sum(l)
 
+	def rankcol(col):
+		return (rank([d[col] for d in ld if col in d]), col)
 
-	sumvariances_df=sum(keysums.values())
-	sumvariances=0.0
+	sofar=[]
+	for col in cols:
+		if col in rowcols: continue
+		colrank=rankcol(col)
+		if len(sofar)<maxcols:
+			sofar+=[colrank]
+			continue
 
-	keystats=[]
-	for key,score in sorted(keysums.items(),key=itemgetter(1),reverse=True):
-		i+=1
-		l=str(key)+"\t"+str(score)+"\t"+str(score/sumvariances_df)
-		if i<maxcols:
-			sumvariances+=score
-			allowedkeys.append(key)
-			l='*'+l
-			if printStats: print l
-						
-		if saveStats: keystats+=[l]
-
-
+		sofar.sort(reverse=True)
+		if sofar[-1][0]<colrank[0]:
+			sofar+=[colrank]
+			sofar=sorted(sofar,reverse=True)[:maxcols]
+	sofar=sorted(sofar,reverse=True)[:maxcols]
+	allowedkeys=[x[1] for x in sofar]
+	print allowedkeys
 	cols=[]
 	for i in range(len(allowedkeys)):
 		if rank:
 			k='r'+str(i+1).zfill(len(str(len(allowedkeys))))+'.'+allowedkeys[i]
 		cols.append(k)
 
-	#cols=allowedkeys
-	#print cols
-	if byVariance or not byFrequency:
-		Zvariances = "Z-variances"
-	else:
-		Zvariances = "TermFrequencies"
+	for col in rowcols:
+		print col
+		cols.append(col)
 
-	if printStats or saveStats:
-		keystats.insert(0,'feature\t'+Zvariances+'\tpercentof_totalVariance')
-		stats=""
-		stats+=">> sum of "+Zvariances+" in dataset:\t"+str(sumvariances_df)
-		stats+= "\n>> sum of "+Zvariances+" loaded:\t"+str(sumvariances)
-		stats+= "\n>> (ratio) sum of loaded "+Zvariances+" / sum of possible:\t"+str(sumvariances/sumvariances_df)
-		stats+= "\n>> # features loaded:\t"+str(len(cols))
-		stats+= "\n>> (ratio) sum of loaded "+Zvariances+" / # of features loaded:\t"+str(sumvariances/len(cols))
-	
-	if printStats:
-		print stats
-		print
-	if saveStats:
-		write('feature-variances.txt',stats+'\n\n'+'\n'.join(keystats),toprint=True)
-	
-	#print cols
 	return cols
 
 
