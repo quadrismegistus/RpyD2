@@ -25,6 +25,25 @@ def load(fn,toprint=True):
 	print "done."
 	return r
 
+def from_csv(fn,sep='\t',lb='\n',header=True):
+	t=open(fn).read()
+	header=[]
+	ld=[]
+	for ln in t.split(lb):
+		if not header: header=ln.split(sep); continue
+		d={}
+		lndat=ln.split(sep)
+		if len(lndat)!=len(header): continue
+		for i,x in enumerate(lndat):
+			if x[0].isdigit():
+				if '.' in x:
+					x=float(x)
+				else:
+					x=int(x)
+			d[header[i]]=x
+		ld.append(d)
+	return RpyD2(ld)
+
 def write(fn,data,toprint=False,join_line='\n',join_cell='\t'):
 	if type(data)==type([]):
 		o=""
@@ -303,6 +322,15 @@ class RpyD2():
 			self._tv=RpyD2(r['as.data.frame'](r['t'](self.df)))
 			self._tv.rownames=list(self._tv.df.rownames)
 		return self._tv
+	
+	def toLD(self,rownamecol=False):
+		ld=[]
+		if rownamecol and type(rownamecol)!=type(''): rownamecol='xkey'
+		for row in self.rows:
+			d=dict(zip(self.cols, self.row(row)))
+			if rownamecol: d[rownamecol]=row
+			ld.append(d)
+		return ld
 	
 	def toDL(self,cols=None,rows=None,rownamecol=False):
 		"""
@@ -583,7 +611,7 @@ class RpyD2():
 		return kwd
 
 	def plot(self, fn=None, x=None, y=None, **opt):
-		opt=self._kwd(opt,col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14, position='identity', xlab_angle=0, logX=False, logY=False, area=False, text=False, text_size=3, text_angle=45, pdf=False)
+		opt=self._kwd(opt,col=None, group=None, w=1100, h=800, size=2, smooth=False, point=True, jitter=False, boxplot=False, boxplot2=False, title=False, flip=False, se=False, density=False, line=False, bar=False, xlab_size=14, ylab_size=14, position='identity', xlab_angle=0, logX=False, logY=False, area=False, text=False, text_size=3, text_angle=45, pdf=False, freqpoly=False)
 
 		if opt['jitter']: opt['position']='jitter'
 		
@@ -620,7 +648,7 @@ class RpyD2():
 			else:
 				pp+=ggplot2.aes_string(x=x, y=y)
 		else:
-			if not opt['density']:
+			if not opt['density'] and not opt['bar'] and not opt['freqpoly']:
 				self._call_remaining('plot',fn=fn,x=x,y=y,**opt)
 				return
 				
@@ -668,10 +696,10 @@ class RpyD2():
 
 		if opt['density']:
 			if opt['density']=='h':
-				if opt['col']:
-					pp+=ggplot2.geom_histogram(ggplot2.aes_string(x=x,y='..count..'))
+				if opt['col'] and opt['group']:
+					pp+=ggplot2.geom_histogram(ggplot2.aes_string(x=x,y='..count..',group=opt['group'],fill=opt['col'],col=opt['col'],alpha=0.2))
 				else:
-					pp+=ggplot2.geom_histogram(ggplot2.aes_string(x=x,y='..scaled..',fill=opt['col'],col=opt['col'],alpha=0.2))
+					pp+=ggplot2.geom_histogram(ggplot2.aes_string(x=x,y='..scaled..'))
 				
 			else:
 				if opt['col']:
@@ -696,6 +724,12 @@ class RpyD2():
 					pp+=ggplot2.geom_bar(ggplot2.aes_string(x=x,fill=opt['col']),position='dodge')
 				else:
 					pp+=ggplot2.geom_bar(ggplot2.aes_string(x=x),position='dodge')
+		
+		if opt['freqpoly']:
+			if opt['col'] and opt['group']:
+				pp+=ggplot2.geom_freqpoly(ggplot2.aes_string(x=x,col=opt['col'],group=opt['group']),position=opt['position'])
+			else:
+				pp+=ggplot2.geom_bar(ggplot2.aes_string(x=x),position=opt['position'])
 		
 		if opt['logX']:
 			pp+=ggplot2.scale_x_log10()
