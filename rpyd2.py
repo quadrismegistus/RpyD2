@@ -896,7 +896,7 @@ class RpyD2():
 		return fit
 	
 	
-	def pca(self,fn='pca.png',col=None,w=1200,h=1200):
+	def pca(self,fn='pca.png',col=None,w=1200,h=1200,title=''):
 		stats    = importr('stats')
 		graphics = importr('graphics')
 
@@ -907,7 +907,7 @@ class RpyD2():
 		ofn=".".join(fn.split(".")[:-1]+["eigens"]+[fn.split(".")[-1]])
 		strfacts=str(df.nrow)+" items using "+str(df.ncol)+" features ["+ofn.split("/")[-1]+"]"
 		grdevices.png(file=ofn, width=w, height=h)
-		graphics.plot(pca, main = "Eigenvalues for "+strfacts)
+		graphics.plot(pca, main = title+" [Eigenvalues for "+strfacts+"]")
 		# if col:
 		# 	graphics.hilight(pca,factors)
 		grdevices.dev_off()
@@ -917,7 +917,7 @@ class RpyD2():
 		ofn=".".join(fn.split(".")[:-1]+["biplot"]+[fn.split(".")[-1]])
 		strfacts=str(df.nrow)+" items using "+str(df.ncol)+" features ["+ofn.split("/")[-1]+"]"
 		grdevices.png(file=ofn, width=w, height=h)
-		stats.biplot(pca, scale=1,main = "biplot of "+strfacts)
+		stats.biplot(pca, scale=1,main = title+" [biplot of "+strfacts+"]")
 		grdevices.dev_off()
 		print ">> saved: "+ofn
 	
@@ -1200,14 +1200,14 @@ class RpyD2():
 	
 	## DISTANCE MEASURES
 
-	def corrgram(self,fn=None,w=1600,h=1600):
+	def corrgram(self,fn=None,w=1600,h=1600,title=''):
 		"""API to corrgram package:
 		"""
 		importr('corrgram')
 		if not fn:
 			fn='corrgram.png'
 		grdevices.png(file=fn, width=w, height=h)
-		r['corrgram'](self.q().df,lower_panel='panel.shade',upper_panel='panel.pts')
+		r['corrgram'](self.q().df,lower_panel='panel.shade',upper_panel='panel.pts',order=True,main=title)
 		grdevices.dev_off()
 		print ">> saved: "+fn
 
@@ -1456,7 +1456,8 @@ class RpyD2():
 	
 	
 	
-	def clustergram(self,fn=None,w=800,h=600,kstart=2,kend=10):
+	def clustergram(self,fn=None,w=800,h=600,kstart=2,kend=10,title=''):
+		if not title: title='[Clustergram of the PCA-weighted Mean of the clusters k-mean clusters vs number of clusters (k)]'
 		ro.r('''
 			clustergram.kmeans <- function(Data, k, ...)
 			{
@@ -1489,7 +1490,7 @@ class RpyD2():
 				{
 					plot(0,0, col = "white", xlim = x.range, ylim = y.range,
 						axes = F,
-						xlab = "Number of clusters (k)", ylab = "PCA weighted Mean of the clusters", main = "Clustergram of the PCA-weighted Mean of the clusters k-mean clusters vs number of clusters (k)")
+						xlab = "Number of clusters (k)", ylab = "PCA weighted Mean of the clusters", main = "'''+title+'''")
 					axis(side =1, at = k.range)
 					axis(side =2)
 					abline(v = k.range, col = "grey")
@@ -1618,16 +1619,17 @@ class RpyD2():
 		return rs
 			
 
-	def kclust(self,k=4,rsplit=False,cor=False,z=True,plot=True,fn=None,w=1100,h=800):
+	def kclust(self,k=4,rsplit=False,cor=False,z=True,plot=True,fn=None,w=1100,h=800,title=''):
 		""" Currently set to return self.pam(k) for robust k-means clustering."""
 		fit=self.pam(k=k,z=z,cor=cor)
 		
 		if plot:
 			importr('cluster')
 			if not fn: fn='kclust'
-			fn+='.'+str(k).zfill(2)+'.z'+str(z)+'.png'
+			if not '.png' in fn: fn+='.'+str(k).zfill(2)+'.z'+str(z)+'.png'
 			grdevices.png(file=fn, width=w, height=h)
-			r['clusplot'](fit,color=True, shade=True, labels=2, lines=0, main=fn)
+			if not title: title=fn
+			r['clusplot'](fit,color=True, shade=True, labels=2, lines=0, main=title)
 			grdevices.dev_off()
 			print ">> saved: "+fn
 
@@ -1716,13 +1718,13 @@ class RpyD2():
 		print ">> saved: "+fn
 	
 
-	def hclust(self,cor=False,z=True,plot=True,fn=None,w=1100,h=900):
+	def hclust(self,cor=False,z=True,plot=True,fn=None,w=1100,h=900,title=''):
 		dist=self.dist(z=z,cor=cor)
 		
 		if not fn: fn='hclust.png'
 		hclust=r['hclust'](dist)
 		grdevices.png(file=fn, width=w, height=h)
-		r['plot'](hclust)
+		r['plot'](hclust,main=title)
 		grdevices.dev_off()
 		print ">> saved: "+fn
 
