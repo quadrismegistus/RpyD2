@@ -412,10 +412,12 @@ class RpyD2():
 		elif not col and not row:
 			return self
 		
-	def sub(self,cols=[],rows=[]):
+	def sub(self,cols=[],rows=[],removeCommon=True):
 		"""Return an RpyD2 from self, with only those rows and/or columns as specified."""
 		
 		if cols and not rows:
+			if cols==self.cols:
+				return self
 			keytup=('cols',tuple(sorted(cols)))
 		elif cols and rows:
 			keytup=('cols',tuple( tuple(sorted(cols)), tuple(sorted(rows)) ))
@@ -427,7 +429,19 @@ class RpyD2():
 		try:
 			return self._subv[keytup[0]][keytup[1]]
 		except KeyError:
-			m=RpyD2(self.toDL(cols,rows,rownamecol=True),rownamecol='rownamecol')
+			dl=self.toDL(cols,rows,rownamecol=True)
+			dlkeys=[k for k in dl.keys() if k!='rownamecol' and k and not k.startswith('index_') and not k.startswith('row_')]
+			if len(dlkeys)>1:
+				dlkey=dlkeys[0]
+				from difflib import SequenceMatcher as SM
+				for dlkey2 in dlkeys[1:]:
+					s=SM(None,dlkey,dlkey2)
+					match=sorted(s.get_matching_blocks(),key=lambda m: -m.size)[0]
+					dlkey=dlkey2[match.b:match.b+match.size]
+				
+				dl=dict(( (k.replace(dlkey,'') if k.replace(dlkey,'') else k),v) for k,v in dl.items())
+			
+			m=RpyD2(dl,rownamecol='rownamecol')
 			self._subv[keytup[0]][keytup[1]]=m
 			return m
 	
@@ -1352,7 +1366,7 @@ class RpyD2():
 		write(fn.replace('.pdf','.netstat.txt'),o,toprint=True)
 		return G
 	
-	def clustergram2(self,fn=None,w=800,h=600,kstart=2,kend=10):
+	def clustergram2(self,fn=None,w=800,h=600,kstart=2,kend=10,kstep=1):
 		ro.r('''
 			library(plyr)
 			ks.default <- function(rows) seq(2, max(3, rows %/% 4))
@@ -1456,7 +1470,7 @@ class RpyD2():
 	
 	
 	
-	def clustergram(self,fn=None,w=800,h=600,kstart=2,kend=10,title=''):
+	def clustergram(self,fn=None,w=800,h=600,kstart=2,kend=10,kstep=1,title=''):
 		if not title: title='[Clustergram of the PCA-weighted Mean of the clusters k-mean clusters vs number of clusters (k)]'
 		ro.r('''
 			clustergram.kmeans <- function(Data, k, ...)
@@ -1516,7 +1530,7 @@ class RpyD2():
 
 
 
-			clustergram <- function(Data, k.range = '''+str(kstart)+''':'''+str(kend)+''', 
+			clustergram <- function(Data, k.range = seq('''+str(kstart)+''','''+str(kend)+''','''+str(kstep)+'''),
 										clustering.function = clustergram.kmeans,
 										clustergram.plot = clustergram.plot.matlines, 
 										line.width = .004, add.center.points = T)
